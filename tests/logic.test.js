@@ -13,6 +13,7 @@ const EN = require('../js/entities.js');
 const INV = require('../js/inventory.js');
 const SV = require('../js/save.js');
 const LV = require('../js/levels.js');
+const WX = require('../js/weather.js');
 
 const { B } = BK;
 const { CHUNK, WORLD_H, SEA, idx } = WG;
@@ -258,7 +259,8 @@ test('網格：半磚頂面在 0.5、床在 0.55', () => {
 });
 
 test('關卡：資料完整、建築確定性、任務物品都有著落', () => {
-  for (const id of ['wizard', 'soldier']) {
+  assert.strictEqual(Object.keys(LV.LEVELS).length, 4, '應有四個關卡');
+  for (const id of Object.keys(LV.LEVELS)) {
     const lvl = LV.LEVELS[id];
     assert.ok(lvl.name && lvl.intro && lvl.outro && lvl.hero, id + ' 關卡欄位缺漏');
     assert.ok(lvl.steps.length >= 4);
@@ -300,6 +302,92 @@ test('投射物：魔法彈命中、圓盾折返被接住', () => {
   const shield = EN.makeProjectile('shield', 0.5, 11.5, 0.5, 0, 0, 1, 8);
   for (let i = 0; i < 300 && !shield.dead; i++) EN.stepProjectile(shield, flat, 1 / 60, player, [], ev);
   assert.ok(shield.dead && shield.caught, '圓盾應飛回被接住');
+});
+
+test('實體：火龍飛行環繞、定時噴火、墜落死亡事件', () => {
+  const flat = { getBlock: (x, y, z) => (y < 10 ? B.STONE : B.AIR) };
+  const rand = N.mulberry32(9);
+  const player = PH.createPlayer(0.5, 10, 0.5);
+  const d = EN.makeMob('dragon', 0.5, 24, 0.5);
+  const events = [];
+  let minY = 99;
+  for (let i = 0; i < 600; i++) { EN.stepMob(d, flat, 1 / 60, player, rand, false, events); minY = Math.min(minY, d.y); }
+  assert.ok(minY > 12, '火龍應保持在空中，實得最低 ' + minY.toFixed(1));
+  const fires = events.filter(e => e.type === 'dragonfire');
+  assert.ok(fires.length >= 3, '10 秒內應噴火 3 次以上，實得 ' + fires.length);
+  d.hp = 0;
+  EN.stepMob(d, flat, 1 / 60, player, rand, false, events);
+  assert.ok(events.some(e => e.type === 'mobdie' && e.mob === d));
+});
+
+test('實體：暗影大師會瞬移到玩家身邊', () => {
+  const flat = { getBlock: (x, y, z) => (y < 10 ? B.STONE : B.AIR) };
+  const rand = N.mulberry32(3);
+  const player = PH.createPlayer(0.5, 10, 0.5);
+  const m = EN.makeMob('shadowmaster', 20, 10, 0.5); // 遠處
+  const events = [];
+  let teleported = false;
+  for (let i = 0; i < 300 && !teleported; i++) {
+    EN.stepMob(m, flat, 1 / 60, player, rand, true, events);
+    if (Math.hypot(m.x - player.x, m.z - player.z) < 3.5) teleported = true;
+  }
+  assert.ok(teleported, '5 秒內應瞬移貼近');
+  assert.ok(events.some(e => e.type === 'poof'));
+});
+
+test('投射物：敵方火球會打中玩家', () => {
+  const flat = { getBlock: () => 0 };
+  const player = PH.createPlayer(0.5, 10, 0.5);
+  const fb = EN.makeProjectile('fireball', 0.5, 10.9, -10, 0, 0, 1, 6, true);
+  const ev = [];
+  for (let i = 0; i < 120 && !fb.dead; i++) EN.stepProjectile(fb, flat, 1 / 60, player, [], ev);
+  assert.ok(ev.some(e => e.type === 'projhitplayer' && e.dmg === 6), '火球應命中玩家');
+});
+
+test('合成：弓/藥水/金屬塊/南瓜燈；發光方塊旗標', () => {
+  const inv = INV.createInventory();
+  const find = (out) => INV.RECIPES.find(r => r.out === out);
+  INV.addItem(inv, B.STICK, 3); INV.addItem(inv, B.WOOL_WHITE, 1);
+  assert.ok(INV.craft(inv, find(B.BOW)));
+  INV.addItem(inv, B.FLOWER_RED, 2); INV.addItem(inv, B.APPLE, 1);
+  assert.ok(INV.craft(inv, find(B.HEAL_POTION)));
+  INV.addItem(inv, B.IRON_INGOT, 4);
+  assert.ok(INV.craft(inv, find(B.IRON_BLOCK)));
+  INV.addItem(inv, B.PUMPKIN, 1); INV.addItem(inv, B.TORCH, 1);
+  assert.ok(INV.craft(inv, find(B.JACKLANTERN)));
+  assert.ok(BK.def(B.JACKLANTERN).light && BK.def(B.TORCH).light && BK.def(B.GLOWSTONE).light);
+  assert.ok(BK.def(B.HEAL_POTION).food === 10 && BK.def(B.GOLDEN_APPLE).food === 20);
+});
+
+test('天氣：狀態機決定性、平滑過渡、雷暴打閃', () => {
+  const seed = 20260715;
+  // 同 rand 序列 → 同天氣歷程（決定性）
+  const runA = [], runB = [];
+  let wA = WX.createWeather(N.mulberry32(seed));
+  let wB = WX.createWeather(N.mulberry32(seed));
+  const rA = N.mulberry32(seed + 1), rB = N.mulberry32(seed + 1);
+  for (let i = 0; i < 6000; i++) { WX.stepWeather(wA, 1 / 60, rA); runA.push(wA.type); }
+  for (let i = 0; i < 6000; i++) { WX.stepWeather(wB, 1 / 60, rB); runB.push(wB.type); }
+  assert.deepStrictEqual(runA, runB, '同種子天氣歷程需一致');
+  assert.ok(new Set(runA).size >= 2, '長時間內應出現多種天氣');
+  // 平滑過渡：intensity 每步變化有上限
+  let w = WX.createWeather(N.mulberry32(1));
+  let prev = w.precip;
+  const r = N.mulberry32(2);
+  for (let i = 0; i < 3000; i++) { WX.stepWeather(w, 1 / 60, r); assert.ok(Math.abs(w.precip - prev) <= 0.02, '降水強度不可瞬變'); prev = w.precip; }
+  // 雷暴一定會打閃並回報
+  let s = WX.createWeather(N.mulberry32(3));
+  s.type = 'storm'; s.precip = 1; s.thunderCool = 0.1;
+  let struck = false;
+  for (let i = 0; i < 60 && !struck; i++) struck = WX.stepWeather(s, 1 / 60, N.mulberry32(4));
+  assert.ok(struck && s.flash > 0.5, '雷暴應打閃並抬升 flash');
+});
+
+test('網格：y=0 基岩底面被剔除（不建永不可見的面）', () => {
+  const w = makeStubWorld([[3, 0, 3, B.STONE]]); // 方塊放在 y=0
+  const m = buildChunkMesh(w, 0, 0);
+  // 下方 y=-1 視為基岩（不透明）→ 底面剔除 → 只剩 5 面 = 30 索引
+  assert.strictEqual(m.solid.count, 30, 'y=0 方塊底面應被剔除，實得 ' + m.solid.count);
 });
 
 test('物理：英雄倍率讓跳躍更高、跑得更快', () => {
@@ -396,6 +484,9 @@ test('存檔：編解碼往返與壞檔防護', () => {
 
   assert.strictEqual(SV.decodeSave('{broken'), null);
   assert.strictEqual(SV.decodeSave('{"v":999}'), null);
+  // 新版仍讀得懂舊版 v1 存檔（往下相容）
+  const v1 = JSON.stringify({ v: 1, seed: 7, mode: 'survival', time: 0.3, player: { x: 0, y: 40, z: 0 }, inv: { sel: 0, slots: [] }, edits: {} });
+  assert.ok(SV.decodeSave(v1) && SV.decodeSave(v1).seed === 7, '應能讀舊版 v1 存檔');
 
   // 注入式 storage
   const mem = { data: {}, setItem(k, v) { this.data[k] = v; }, getItem(k) { return this.data[k] || null; }, removeItem(k) { delete this.data[k]; } };

@@ -44,6 +44,8 @@
     player: null, inv: null,
     time: 0.30, playedT: 0,
     drops: [], mobs: [], fuses: [], lights: new Map(), projectiles: [],
+    burst: [],               // 純視覺碎屑粒子（挖掘/爆炸）
+    weather: null,           // MWWeather 狀態
     sleeping: 0,
     levelId: null, quest: null, hero: null, points: null,
     castCool: 0, shieldOut: false,
@@ -85,6 +87,7 @@
     G.time = 0.30;
     G.drops = []; G.mobs = []; G.fuses = []; G.sleeping = 0;
     G.projectiles = []; G.shieldOut = false; G.points = null;
+    G.burst = []; G.weather = MWWeather.createWeather(G.rand);
     G.meshed.clear();
     G.playedT = 0;
     G.freshSpawn = true;
@@ -128,6 +131,11 @@
     const lvl = G.levelId ? LEVELS[G.levelId] : null;
     G.hero = lvl ? lvl.hero : null;
     G.quest = lvl ? (o.quest || { step: 0, kills: 0, done: false, bossSpawned: false }) : null;
+    // 存檔不含 mobs：若讀檔時卡在魔王步驟，重置旗標讓魔王重新登場（否則永久卡關）
+    if (G.quest && !G.quest.done && lvl) {
+      const st = lvl.steps[G.quest.step];
+      if (st && st.type === 'boss') { G.quest.bossSpawned = false; G.quest.bossKilled = false; }
+    }
     G.seed = o.seed;
     G.world = new MWWorld.World(o.seed);
     G.world.loadEdits(o.edits || {});
@@ -141,6 +149,7 @@
     G.time = o.time || 0.3;
     G.drops = []; G.mobs = []; G.fuses = []; G.sleeping = 0;
     G.projectiles = []; G.shieldOut = false; G.points = null;
+    G.burst = []; G.weather = o.weather || MWWeather.createWeather(G.rand);
     // 任務掉落物還原（魔杖/掃帚/核心等還沒撿的）
     if (Array.isArray(o.pdrops)) {
       for (const [x, y, z, id] of o.pdrops) {
@@ -164,7 +173,7 @@
   function doSave(silent) {
     if (!G.world) return false;
     const ok = MWSave.saveTo(localStorage, {
-      seed: G.seed, mode: G.mode, time: G.time,
+      seed: G.seed, mode: G.mode, time: G.time, weather: G.weather,
       level: G.levelId, quest: G.quest, origin: G.origin || null,
       pdrops: G.drops.filter(d => d.persistent && !d.dead).map(d => [d.x, d.y, d.z, d.blockId]),
       player: {
@@ -236,7 +245,7 @@
     for (const [key, ed] of G.world.edits) {
       const [cx, cz] = key.split(',').map(Number);
       for (const [i, id] of ed) {
-        if (id === B.TORCH || id === B.GLOWSTONE) {
+        if (def(id).light) { // 火把/螢石/南瓜燈…凡 def 有 light 旗標皆入表
           const y = i % WORLD_H, col = (i - y) / WORLD_H;
           const lx = col >> 4, lz = col & 15;
           const wx = cx * CHUNK + lx, wz = cz * CHUNK + lz;
@@ -246,8 +255,8 @@
     }
   }
   function noteLightChange(x, y, z, newId, oldId) {
-    if (oldId === B.TORCH || oldId === B.GLOWSTONE) G.lights.delete(lightKey(x, y, z));
-    if (newId === B.TORCH || newId === B.GLOWSTONE) G.lights.set(lightKey(x, y, z), [x + 0.5, y + 0.6, z + 0.5]);
+    if (oldId !== undefined && def(oldId).light) G.lights.delete(lightKey(x, y, z));
+    if (def(newId).light) G.lights.set(lightKey(x, y, z), [x + 0.5, y + 0.6, z + 0.5]);
   }
 
   // ---------- TNT 與爆炸 ----------
@@ -259,6 +268,7 @@
 
   function explode(x, y, z, r, dmg) {
     SFX.explosion();
+    spawnBurst(x, y, z, 33, 26, 9); // TNT 側貼圖碎屑，大範圍噴飛
     const R = Math.ceil(r);
     for (let dx = -R; dx <= R; dx++) for (let dy = -R; dy <= R; dy++) for (let dz = -R; dz <= R; dz++) {
       if (dx * dx + dy * dy + dz * dz > r * r) continue;
@@ -286,18 +296,37 @@
   function castItem(held, dir) {
     if (G.castCool > 0) return;
     const p = G.player;
-    const kind = def(held.id).cast;
-    if (kind === 'magic') {
+    const d = def(held.id);
+    if (d.cast === 'magic') {
       const dmg = (G.hero && G.hero.magicDmg) || 6;
       G.projectiles.push(EN.makeProjectile('magic', p.x, p.y + p.eye - 0.1, p.z, dir[0], dir[1], dir[2], dmg));
       G.castCool = 0.45;
       SFX.magic();
-    } else if (kind === 'shield') {
+    } else if (d.cast === 'shield') {
       if (G.shieldOut) return;
       const dmg = (G.hero && G.hero.shieldDmg) || 7;
       G.projectiles.push(EN.makeProjectile('shield', p.x, p.y + p.eye - 0.2, p.z, dir[0], dir[1], dir[2], dmg));
       G.shieldOut = true;
       G.castCool = 0.3;
+      SFX.throwWhoosh();
+    } else if (d.cast === 'proj') {
+      // 弓 / 手裡劍 / 烈焰弓：依 def.proj 參數發射
+      G.projectiles.push(EN.makeProjectile(d.proj.type, p.x, p.y + p.eye - 0.1, p.z, dir[0], dir[1], dir[2], d.proj.dmg));
+      G.castCool = d.proj.cool;
+      if (d.proj.type === 'firearrow') SFX.magic(); else SFX.throwWhoosh();
+    } else if (d.cast === 'blink') {
+      // 煙霧彈：往視線方向瞬身最多 8 格（撞牆就停在前一格）
+      let tx = p.x, ty = p.y, tz = p.z;
+      for (let s = 0.5; s <= 8; s += 0.5) {
+        const nx = p.x + dir[0] * s, ny = p.y + dir[1] * s + 0.9, nz = p.z + dir[2] * s;
+        const yy = Math.max(1, Math.min(WORLD_H - 3, ny - 0.9));
+        if (isSolid(G.world.getBlock(Math.floor(nx), Math.floor(yy), Math.floor(nz))) ||
+            isSolid(G.world.getBlock(Math.floor(nx), Math.floor(yy + 1), Math.floor(nz)))) break;
+        tx = nx; ty = yy; tz = nz;
+      }
+      p.x = tx; p.y = ty; p.z = tz;
+      p.vx = 0; p.vy = 0; p.vz = 0; p.fallV = 0;
+      G.castCool = 1.2;
       SFX.throwWhoosh();
     }
   }
@@ -381,6 +410,30 @@
   }
 
   // ---------- 天色 ----------
+  // 玩家頭頂是否見天（洞穴/室內不下雨）
+  function playerExposed() {
+    const p = G.player;
+    if (!p) return false;
+    return G.world.lightAt(Math.floor(p.x), Math.floor(p.y + p.eye + 1), Math.floor(p.z)) >= 14;
+  }
+  // 玩家所在是否為雪地群系（降水以雪呈現）
+  function biomeSnowy() {
+    const p = G.player;
+    return WG.biomeAt(G.seed, Math.floor(p.x), Math.floor(p.z)) === 'snow';
+  }
+  // 生成碎屑粒子（挖掘/爆炸）；純視覺，用 Math.random 不擾動世界 RNG
+  function spawnBurst(x, y, z, tile, n, spread) {
+    const s = spread || 3;
+    for (let i = 0; i < n; i++) {
+      G.burst.push({
+        x, y, z, tile,
+        vx: (Math.random() - 0.5) * s, vy: Math.random() * s * 0.9 + 1, vz: (Math.random() - 0.5) * s,
+        size: 0.10 + Math.random() * 0.08,
+        life: 0.5 + Math.random() * 0.5,
+      });
+    }
+  }
+
   function skyState() {
     const th = G.time * Math.PI * 2;
     const sunY = Math.sin(th), sunX = Math.cos(th);
@@ -414,6 +467,26 @@
     if (p.hurtCool > 0) p.hurtCool -= dt;
     if (G.digCool > 0) G.digCool -= dt;
     if (G.placeCool > 0) G.placeCool -= dt;
+
+    // 天氣（純視覺，但狀態機在此推進；打閃時延遲播雷聲）
+    if (G.weather) {
+      const struck = MWWeather.stepWeather(G.weather, dt, G.rand);
+      if (struck && playerExposed()) {
+        const delay = 400 + G.rand() * 2200; // 光比聲快
+        setTimeout(() => { if (G.state === 'playing') SFX.thunder(); }, delay);
+      }
+    }
+
+    // 碎屑粒子（挖掘/爆炸的純視覺，重力落下、限時消失）
+    if (G.burst.length) {
+      for (const b of G.burst) {
+        b.life -= dt;
+        b.vy -= 22 * dt;
+        b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+        if (isSolid(w.getBlock(Math.floor(b.x), Math.floor(b.y), Math.floor(b.z)))) { b.vy = 0; b.vx *= 0.5; b.vz *= 0.5; }
+      }
+      G.burst = G.burst.filter(b => b.life > 0);
+    }
 
     // 移動（冒險模式套用英雄能力倍率）
     p.yaw = inp.yaw; p.pitch = inp.pitch;
@@ -508,8 +581,12 @@
       const pev = [];
       for (const pr of G.projectiles) EN.stepProjectile(pr, w, dt, p, G.mobs, pev);
       for (const e of pev) {
-        EN.hurtMob(e.mob, e.dmg, e.kx, e.kz);
-        SFX.attackHit();
+        if (e.type === 'projhit') {
+          EN.hurtMob(e.mob, e.dmg, e.kx, e.kz);
+          SFX.attackHit();
+        } else if (e.type === 'projhitplayer') {
+          damagePlayer(e.dmg, e);
+        }
       }
       G.projectiles = G.projectiles.filter(pr => {
         if (pr.dead && pr.type === 'shield') G.shieldOut = false;
@@ -574,6 +651,14 @@
       if (e.type === 'attack' && G.mode !== 'creative') damagePlayer(e.dmg, e);
       else if (e.type === 'explode') explode(e.x, e.y, e.z, e.r, e.dmg);
       else if (e.type === 'hiss') SFX.hiss();
+      else if (e.type === 'poof') SFX.throwWhoosh(); // 暗影大師瞬移
+      else if (e.type === 'dragonfire') {
+        // 火龍朝玩家吐火球（敵方投射物）
+        const fx = p.x - e.x, fy = (p.y + 0.9) - e.y, fz = p.z - e.z;
+        const fl = Math.hypot(fx, fy, fz) || 1;
+        G.projectiles.push(EN.makeProjectile('fireball', e.x, e.y, e.z, fx / fl, fy / fl, fz / fl, 6, true));
+        SFX.roar();
+      }
       else if (e.type === 'mobdie') {
         if (G.mode !== 'creative') {
           const d = MOB_DROPS[e.mob.type];
@@ -659,6 +744,7 @@
     G.world.setBlock(x, y, z, B.AIR);
     noteLightChange(x, y, z, B.AIR, id);
     SFX.breakBlock(soundKind(id));
+    spawnBurst(x + 0.5, y + 0.5, z + 0.5, tileOf(id, 'side'), 8, 3.2); // 挖掉冒碎屑
     if (withDrop) {
       const drop = dropOf(id);
       if (drop !== B.AIR) G.drops.push(EN.makeDrop(x + 0.5, y + 0.3, z + 0.5, drop, G.rand));
@@ -734,9 +820,27 @@
     const p = G.player;
     const sky = skyState();
     const underwater = p.headInWater;
-    const fogFar = underwater ? 20 : 92;
-    const fogNear = underwater ? 4 : 62;
-    const fogColor = underwater ? [0.05, 0.18, 0.38] : sky.hor;
+
+    // 天氣：陰暗、灰濛、閃電、雨中視野縮短
+    const wthr = G.weather || { precip: 0, cloud: 0.25, gloom: 0, flash: 0, type: 'clear' };
+    const gloom = wthr.gloom, flash = wthr.flash;
+    const exposed = playerExposed();
+    const precip = exposed ? wthr.precip : 0;
+    const snowy = biomeSnowy();
+    const darken = (c, k) => c.map(v => v * (1 - gloom * k));
+    const lerpTo = (c, t, k) => c.map((v, i) => v + (t[i] - v) * k);
+    let skyTop = lerpTo(darken(sky.top, 0.55), [0.28, 0.30, 0.34], gloom * 0.5);
+    let skyHor = lerpTo(darken(sky.hor, 0.45), [0.34, 0.36, 0.40], gloom * 0.55);
+    if (flash > 0) { // 閃電照亮天空
+      const f = flash * 0.7;
+      skyTop = skyTop.map(v => Math.min(1, v + f));
+      skyHor = skyHor.map(v => Math.min(1, v + f));
+    }
+    const dayW = Math.min(1, sky.day * (1 - gloom * 0.5) + flash * 0.5);
+    const fogFar = underwater ? 20 : (92 - precip * 32);
+    const fogNear = underwater ? 4 : (62 - precip * 18);
+    const fogColor = underwater ? [0.05, 0.18, 0.38] : skyHor.slice();
+    $('overlay-flash').style.opacity = flash > 0 ? Math.min(0.6, flash * 0.55) : 0;
 
     // 火把/螢石點光源：取離玩家最近 16 盞
     const near = [];
@@ -765,24 +869,38 @@
     for (const f of G.fuses) {
       dropScene.push({ x: f.x, y: f.y, z: f.z, spin: 0, tile: 35, light: 1, flash: 0.35 + 0.35 * Math.sin(f.t * 22), scale: 0.98 });
     }
+    const PROJ_VIEW = {
+      magic: { tile: 89, scale: 0.3, flash: 0.3 },
+      shield: { tile: 88, scale: 0.5 },
+      arrow: { tile: 110, scale: 0.34 },
+      shuriken: { tile: 106, scale: 0.36 },
+      firearrow: { tile: 111, scale: 0.34, flash: 0.35 },
+      fireball: { tile: 111, scale: 0.62, flash: 0.4 },
+    };
     for (const pr of G.projectiles) {
-      if (pr.type === 'magic') {
-        dropScene.push({ x: pr.x, y: pr.y - 0.15, z: pr.z, spin: pr.spin, tile: 89, light: 1, flash: 0.3, scale: 0.3 });
+      const v = PROJ_VIEW[pr.type];
+      if (v.flash !== undefined) {
+        dropScene.push({ x: pr.x, y: pr.y - v.scale / 2, z: pr.z, spin: 0, tile: v.tile, light: 1, flash: v.flash, scale: v.scale });
       } else {
-        dropScene.push({ x: pr.x, y: pr.y - 0.3, z: pr.z, spin: pr.spin, tile: 88, light: 1, scale: 0.5 });
+        dropScene.push({ x: pr.x, y: pr.y - 0.3, z: pr.z, spin: pr.spin, tile: v.tile, light: 1, scale: v.scale });
       }
+    }
+    // 碎屑粒子（小方塊）
+    for (const b of G.burst) {
+      dropScene.push({ x: b.x, y: b.y, z: b.z, spin: 0, tile: b.tile, flash: 0, scale: b.size, light: sl(b.x, b.y, b.z) });
     }
 
     renderer.render({
       cam: { x: p.x, y: p.y + p.eye, z: p.z, yaw: p.yaw, pitch: p.pitch },
       fovY: (MWInput.state.keys.has('ShiftLeft') && !p.fly && p.onGround === false ? 1.28 : 1.22),
-      day: sky.day,
-      skyTop: sky.top, skyHorizon: sky.hor,
+      day: dayW,
+      skyTop, skyHorizon: skyHor,
       fogColor, fogNear, fogFar,
-      starAlpha: sky.starAlpha,
+      starAlpha: sky.starAlpha * (1 - gloom),
       underwater,
       glow: 0.85,
       cloudOffset: G.playedT * 1.2,
+      weather: { precip, snow: snowy, cloud: wthr.cloud, time: G.playedT, flash },
       billboards: [
         { dir: norm3(sky.sunDir), size: 34, color: [1, 0.97, 0.85, 1] },
         { dir: norm3([-sky.sunDir[0], -sky.sunDir[1], -sky.sunDir[2]]), size: 22, color: [0.92, 0.94, 1, 0.9] },
@@ -843,7 +961,8 @@
     $('coords').textContent = `x ${p.x.toFixed(0)}  y ${p.y.toFixed(0)}  z ${p.z.toFixed(0)}　${bname}${p.fly ? '　✈ 飛行' : ''}`;
     const hour = (G.time * 24 + 6) % 24;
     const sky = skyState();
-    $('daynight').textContent = `${sky.isNight ? '🌙' : '☀️'} ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor(hour % 1 * 60)).padStart(2, '0')}`;
+    const wlabel = G.weather && G.weather.type !== 'clear' ? '　' + MWWeather.weatherLabel(G.weather) : '';
+    $('daynight').textContent = `${sky.isNight ? '🌙' : '☀️'} ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor(hour % 1 * 60)).padStart(2, '0')}${wlabel}`;
     G.hurtFlash > 0 ? $('overlay-hurt').style.opacity = 1 : $('overlay-hurt').style.opacity = 0;
     $('overlay-water').style.opacity = p.headInWater ? 1 : 0;
     $('overlay-sleep').style.opacity = (G.sleeping > 0 && G.sleeping < 1.2) ? 1 : 0;

@@ -77,6 +77,11 @@
     eat() { noiseBurst(0.07, 0.15, 1000); setTimeout(() => noiseBurst(0.07, 0.15, 900), 130); setTimeout(() => noiseBurst(0.08, 0.14, 800), 270); },
     sleep() { blip(392, 0.5, 'sine', 0.14, 1.0); setTimeout(() => blip(523, 0.8, 'sine', 0.14, 1.0), 350); },
     magic() { blip(900, 0.18, 'sine', 0.14, 2.2); blip(1350, 0.12, 'triangle', 0.08, 1.6); },
+    roar() { noiseBurst(0.5, 0.3, 500); blip(90, 0.5, 'sawtooth', 0.22, 0.55); },
+    thunder() {
+      noiseBurst(0.10, 0.35, 6000);                                  // 起爆的劈啪
+      setTimeout(() => { noiseBurst(1.6, 0.28, 380); blip(55, 1.4, 'sawtooth', 0.16, 0.5); }, 90); // 滾雷
+    },
     throwWhoosh() { noiseBurst(0.14, 0.14, 2600); },
     victory() {
       blip(523, 0.25, 'triangle', 0.18, 1.0);

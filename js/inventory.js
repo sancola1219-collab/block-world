@@ -108,6 +108,14 @@ const RECIPES = [
   { name: '紅羊毛', out: B.WOOL_RED, outCount: 1, ins: [{ id: B.WOOL_WHITE, count: 1 }, { id: B.FLOWER_RED, count: 1 }] },
   { name: '黃羊毛', out: B.WOOL_YELLOW, outCount: 1, ins: [{ id: B.WOOL_WHITE, count: 1 }, { id: B.FLOWER_YELLOW, count: 1 }] },
   { name: '藍羊毛', out: B.WOOL_BLUE, outCount: 1, ins: [{ id: B.WOOL_WHITE, count: 1 }, { id: B.DIAMOND, count: 1 }] },
+  { name: '弓', out: B.BOW, outCount: 1, ins: [{ id: B.STICK, count: 3 }, { id: B.WOOL_WHITE, count: 1 }] },
+  { name: '金蘋果', out: B.GOLDEN_APPLE, outCount: 1, ins: [{ id: B.GOLD_INGOT, count: 4 }, { id: B.APPLE, count: 1 }] },
+  { name: '治療藥水', out: B.HEAL_POTION, outCount: 1, ins: [{ id: B.FLOWER_RED, count: 2 }, { id: B.APPLE, count: 1 }] },
+  { name: '鐵塊', out: B.IRON_BLOCK, outCount: 1, ins: [{ id: B.IRON_INGOT, count: 4 }] },
+  { name: '金塊', out: B.GOLD_BLOCK, outCount: 1, ins: [{ id: B.GOLD_INGOT, count: 4 }] },
+  { name: '鑽石塊', out: B.DIAMOND_BLOCK, outCount: 1, ins: [{ id: B.DIAMOND, count: 4 }] },
+  { name: '書櫃', out: B.BOOKSHELF, outCount: 1, ins: [{ id: B.PLANK, count: 4 }, { id: B.WOOL_RED, count: 1 }] },
+  { name: '南瓜燈', out: B.JACKLANTERN, outCount: 1, ins: [{ id: B.PUMPKIN, count: 1 }, { id: B.TORCH, count: 1 }] },
 ];
 
 function canCraft(inv, r) {

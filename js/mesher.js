@@ -67,13 +67,47 @@ function faceVisible(id, nid) {
   return !isOpaque(nid) && nid !== id;
 }
 
+// 快照快取（模組層重複使用，避免每塊重新配置）：
+// 建網格時每個 voxel 會被鄰面/AO 取樣 10 次以上，直接查 world.getBlock 的
+// Map 查找是主要成本。先把 18×18 柱（含 1 格邊界）拷進平面陣列，之後全是陣列讀取。
+const SNAP_W = CHUNK + 2;
+const SNAP = new Uint8Array(SNAP_W * SNAP_W * WORLD_H);
+const LIGHT_SNAP = new Int16Array(SNAP_W * SNAP_W * WORLD_H); // -1 = 尚未計算（惰性）
+
 function buildChunkMesh(world, cx, cz) {
   const solid = { verts: [], inds: [] };
   const cutout = { verts: [], inds: [] };
   const water = { verts: [], inds: [] };
   const bx = cx * CHUNK, bz = cz * CHUNK;
   const chunk = world.getChunk(cx, cz);
-  const get = (wx, wy, wz) => world.getBlock(wx, wy, wz);
+
+  // 方塊快照：逐柱用 TypedArray.set 拷貝（每柱 96 bytes）
+  for (let sx = 0; sx < SNAP_W; sx++) {
+    const wx = bx - 1 + sx;
+    const ccx = Math.floor(wx / CHUNK), lx2 = wx - ccx * CHUNK;
+    for (let sz = 0; sz < SNAP_W; sz++) {
+      const wz = bz - 1 + sz;
+      const ccz = Math.floor(wz / CHUNK), lz2 = wz - ccz * CHUNK;
+      const src = (ccx === cx && ccz === cz) ? chunk : world.getChunk(ccx, ccz);
+      const off = ((lx2 << 4) | lz2) * WORLD_H;
+      SNAP.set(src.data.subarray(off, off + WORLD_H), (sx * SNAP_W + sz) * WORLD_H);
+    }
+  }
+  LIGHT_SNAP.fill(-1);
+
+  const get = (wx, wy, wz) => {
+    // 與 world.getBlock 一致：y<0 是基岩（不透明），否則 y=0 底面會多建 256 個永不可見的面
+    if (wy < 0) return B.BEDROCK;
+    if (wy >= WORLD_H) return B.AIR;
+    return SNAP[((wx - bx + 1) * SNAP_W + (wz - bz + 1)) * WORLD_H + wy];
+  };
+  const lightAt = (wx, wy, wz) => {
+    if (wy < 0 || wy >= WORLD_H) return 15;
+    const i = ((wx - bx + 1) * SNAP_W + (wz - bz + 1)) * WORLD_H + wy;
+    let v = LIGHT_SNAP[i];
+    if (v < 0) { v = world.lightAt(wx, wy, wz); LIGHT_SNAP[i] = v; }
+    return v;
+  };
 
   for (let lx = 0; lx < CHUNK; lx++) {
     for (let lz = 0; lz < CHUNK; lz++) {
@@ -84,7 +118,7 @@ function buildChunkMesh(world, cx, cz) {
         const d = def(id);
 
         if (d.cross) {
-          const sky = d.emissive ? 2.0 : world.lightAt(wx, y, wz) / 15;
+          const sky = d.emissive ? 2.0 : lightAt(wx, y, wz) / 15;
           pushCross(cutout, wx, y, wz, tileOf(id, 'side'), sky);
           continue;
         }
@@ -98,7 +132,7 @@ function buildChunkMesh(world, cx, cz) {
           const forceTop = d.h !== undefined && f.n[1] === 1;
           if (!forceTop && !faceVisible(id, nid)) continue;
 
-          const sky = d.emissive ? 2.0 : world.lightAt(nx, ny, nz) / 15;
+          const sky = d.emissive ? 2.0 : lightAt(nx, ny, nz) / 15;
           const tile = tileOf(id, f.face);
           let ao = null;
           if (!liquid && !d.cutout) {

@@ -12,8 +12,8 @@
 
 - **邏輯層（node 可測，不碰瀏覽器）**：`js/noise.js`（雜湊/噪聲）→ `js/blocks.js`（方塊表）→
   `js/worldgen.js`（地形/生物群系/洞穴/礦/樹）→ `js/world.js`（區塊儲存/天光/編輯追蹤）→
-  `js/mesher.js`（網格+AO）；`js/physics.js`（AABB/DDA）、`js/entities.js`（豬/殭屍/掉落物）、
-  `js/inventory.js`（36格+合成）、`js/save.js`（存檔編解碼）。
+  `js/mesher.js`（網格+AO）；`js/physics.js`（AABB/DDA）、`js/entities.js`（生物/掉落物/投射物）、
+  `js/inventory.js`（36格+合成）、`js/save.js`（存檔編解碼）、`js/levels.js`（冒險關卡）、`js/weather.js`（天氣狀態機）。
 - **瀏覽器層**：`js/textures.js`（Canvas 程序材質圖集 256×256）、`js/render.js`（WebGL2）、
   `js/audio.js`（WebAudio 合成）、`js/input.js`（鍵鼠+觸控）、`js/main.js`（狀態機/60Hz/串流/UI）。
 
@@ -35,11 +35,15 @@
 - 半高方塊用 `def.h`（半磚 0.5、床 0.55）：mesher 頂面用 h、物理 overlaps 用 h、isOpaque 回 false。
 - 火把/螢石＝shader 點光源（上限 16 盞取最近）：main 的 `G.lights` 註冊表，讀檔時 `rebuildLights()` 從 edits 重建——新增光源方塊記得掛進 `noteLightChange`。
 - 爆炸（TNT/苦力怕）走 main 的 `explode()`：炸方塊＋連鎖 TNT＋玩家/生物傷害；引信是 `G.fuses` 實體。
-- 存檔 key `mineworld.save.v1`（localStorage）：種子＋方塊差異＋玩家＋物品欄；設定 `mineworld.settings.v1`。
+- 存檔 key `mineworld.save.v1`（localStorage）：種子＋方塊差異＋玩家＋物品欄＋任務＋天氣；設定 `mineworld.settings.v1`。
+  **encodeSave 是欄位白名單**，加存檔欄位要一起加否則默默丟失。`SAVE_VERSION` 升版時 `KNOWN_VERSIONS` 要含舊版（新版讀舊檔），舊版才會安全拒讀新檔。
+- 天氣（`weather.js`）：clear/cloudy/rain/storm，`stepWeather` 走傳入 rand；雨/雪呈現由 `biomeAt` 決定；純視覺不影響玩法。
+  渲染的雨雪粒子＝相機盒內告示板 quad，位置是時間的解析函式（無狀態）。碎屑粒子 `G.burst` 在 tick 走重力。
+- 冒險關卡（`levels.js`）：`buildStructure` 決定性建築；魔王步驟讀檔要重置 `bossSpawned`（存檔不含 mobs）。
 
 ## 測試與驗證
 
-- `node --test`：14 項（噪聲決定性、地形、區塊、天光、網格面數、物理、DDA、實體、物品欄、存檔）。
+- `node --test`：28 項（噪聲、地形、區塊、天光、網格面數＋y=0 剔除、物理、DDA、實體、投射物、工具、關卡、天氣、物品欄、存檔相容）。
 - 瀏覽器自動驗證用 `window.__mw`：`{G, tick, step, chunkWork, renderFrame, doSave, newGame, loadGame, skyState, renderer}`。
   隱藏分頁 rAF 停擺：先 `cv.width=800; cv.height=450` 再手動 `renderFrame()`，用 `gl.readPixels` 取樣驗色。
 - 合成 tick 一律 `mw.tick(1/60)` 迴圈驅動；輸入用 `MWInput.state`（`keys.add('KeyW')`、`mouseDown[0]`、`transient.*`）。

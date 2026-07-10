@@ -227,6 +227,19 @@
   MODELS.darkwizard = humanoid(92, 93, 92);
   MODELS.robot = humanoid(90, 91, 90);
   MODELS.robotking = humanoid(90, 91, 90);
+  MODELS.shadowblade = humanoid(112, 113, 112);
+  MODELS.shadowmaster = humanoid(112, 113, 112);
+  MODELS.lizard = humanoid(114, 115, 114);
+  // 火龍：軀幹＋頭臉＋雙翼（swing=拍翅）＋尾巴
+  MODELS.dragon = [
+    { size: [1.3, 0.95, 2.1], at: [0, 1.2, 0], tile: 116 },
+    { size: [0.75, 0.7, 0.9], at: [0, 1.55, -1.45], tile: 116 },
+    { size: [0.7, 0.65, 0.06], at: [0, 1.55, -1.92], tile: 117 },
+    { size: [1.5, 0.1, 1.1], pivot: [1.35, 1.65, 0], swing: 1.6, tile: 116 },
+    { size: [1.5, 0.1, 1.1], pivot: [-1.35, 1.65, 0], swing: -1.6, tile: 116 },
+    { size: [0.45, 0.4, 1.5], at: [0, 1.25, 1.7], tile: 116 },
+    { size: [0.25, 0.25, 0.9], at: [0, 1.3, 2.8], tile: 116 },
+  ];
 
   function createRenderer(canvas) {
     const gl = canvas.getContext('webgl2', { antialias: true });
@@ -362,6 +375,20 @@
     gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 28, 12);
     gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 28, 20);
     gl.bindVertexArray(null);
+
+    // ---- 天氣粒子（雨/雪）：相機周圍盒內的告示板小 quad，位置由時間解析求得（無狀態） ----
+    const PMAX = 540;
+    const pbx = new Float32Array(PMAX), pbz = new Float32Array(PMAX), pph = new Float32Array(PMAX), psp = new Float32Array(PMAX);
+    const prand = MWNoise.mulberry32(4242);
+    for (let i = 0; i < PMAX; i++) { pbx[i] = (prand() * 2 - 1) * 16; pbz[i] = (prand() * 2 - 1) * 16; pph[i] = prand(); psp[i] = prand(); }
+    const partVao = gl.createVertexArray();
+    gl.bindVertexArray(partVao);
+    const partVbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, partVbo);
+    gl.bufferData(gl.ARRAY_BUFFER, PMAX * 6 * 3 * 4, gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 12, 0);
+    gl.bindVertexArray(null);
+    const partBuf = new Float32Array(PMAX * 6 * 3);
 
     function resize() {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -547,7 +574,7 @@
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.depthMask(false);
-        gl.uniform1f(U(progChunk, 'uAlpha'), 0.55);
+        gl.uniform1f(U(progChunk, 'uAlpha'), 0.45 + (sc.weather ? sc.weather.cloud : 0.3) * 0.5);
         gl.uniform1f(U(progChunk, 'uCutout'), 0);
         gl.bindVertexArray(cloudVao);
         // 平面跟著攝影機，uv 依世界座標偏移 → 雲相對世界固定並隨時間飄
@@ -575,6 +602,53 @@
         gl.drawElements(gl.TRIANGLES, m.water.count, gl.UNSIGNED_INT, 0);
       }
       gl.depthMask(true);
+
+      // 天氣粒子（雨/雪）— 位置為時間的解析函式，落下並在盒內環繞包覆
+      if (!sc.underwater && sc.weather && sc.weather.precip > 0.01) {
+        const wsc = sc.weather;
+        const n = Math.floor(wsc.precip * PMAX);
+        const snow = wsc.snow;
+        const t = wsc.time;
+        const HB = 16, range = 26, topY = sc.cam.y + 16;
+        const rx = Math.cos(sc.cam.yaw), rz = -Math.sin(sc.cam.yaw);
+        const halfW = snow ? 0.05 : 0.012, halfH = snow ? 0.05 : 0.34;
+        const rX = rx * halfW, rZ = rz * halfW;
+        const P2 = 2 * HB;
+        const wrap = (v) => ((v % P2) + P2) % P2 - HB;
+        let o = 0;
+        for (let i = 0; i < n; i++) {
+          const spd = snow ? (2.4 + psp[i] * 1.6) : (24 + psp[i] * 12);
+          const y = topY - ((t * spd + pph[i] * range) % range);
+          const bxp = pbx[i] + (snow ? Math.sin(t * 0.7 + i * 1.3) * 1.2 : t * 4);
+          const bzp = pbz[i] + (snow ? Math.cos(t * 0.6 + i * 0.9) * 1.2 : 0);
+          const x = sc.cam.x + wrap(bxp), z = sc.cam.z + wrap(bzp);
+          const x0 = x - rX, z0 = z - rZ, x1 = x + rX, z1 = z + rZ;
+          const yb = y - halfH, yt = y + halfH;
+          partBuf[o++] = x0; partBuf[o++] = yb; partBuf[o++] = z0;
+          partBuf[o++] = x1; partBuf[o++] = yb; partBuf[o++] = z1;
+          partBuf[o++] = x1; partBuf[o++] = yt; partBuf[o++] = z1;
+          partBuf[o++] = x1; partBuf[o++] = yt; partBuf[o++] = z1;
+          partBuf[o++] = x0; partBuf[o++] = yt; partBuf[o++] = z0;
+          partBuf[o++] = x0; partBuf[o++] = yb; partBuf[o++] = z0;
+        }
+        if (n > 0) {
+          gl.useProgram(progFlat);
+          gl.uniformMatrix4fv(U(progFlat, 'uPV'), false, pv);
+          gl.uniformMatrix4fv(U(progFlat, 'uModel'), false, ident());
+          const a = Math.min(1, wsc.precip + 0.15);
+          if (snow) gl.uniform4f(U(progFlat, 'uColor'), 0.95, 0.97, 1.0, 0.85 * a);
+          else gl.uniform4f(U(progFlat, 'uColor'), 0.62, 0.72, 0.92, 0.5 * a);
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          gl.depthMask(false);
+          gl.bindVertexArray(partVao);
+          gl.bindBuffer(gl.ARRAY_BUFFER, partVbo);
+          gl.bufferSubData(gl.ARRAY_BUFFER, 0, partBuf.subarray(0, o));
+          gl.drawArrays(gl.TRIANGLES, 0, n * 6);
+          gl.depthMask(true);
+          gl.disable(gl.BLEND);
+        }
+      }
 
       // 裂痕
       if (sc.crack) {

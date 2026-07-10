@@ -13,6 +13,8 @@ const B = {
   TALL_GRASS: 25, WOOL_RED: 26, WOOL_BLUE: 27, WOOL_YELLOW: 28,
   SNOW_BLOCK: 29, GRAVEL: 30,
   WOOL_WHITE: 31, TORCH: 32, TNT: 33, BED: 34, SLAB_STONE: 35, SLAB_PLANK: 36,
+  ICE: 37, OBSIDIAN: 38, IRON_BLOCK: 39, GOLD_BLOCK: 40, DIAMOND_BLOCK: 41,
+  BOOKSHELF: 42, PUMPKIN: 43, JACKLANTERN: 44,
   // ---- 物品 ----
   STICK: 100, COAL: 101, IRON_INGOT: 102, GOLD_INGOT: 103, DIAMOND: 104,
   PORKCHOP: 105, BEEF: 106, APPLE: 107, GUNPOWDER: 108,
@@ -21,6 +23,8 @@ const B = {
   WOOD_SHOVEL: 118, STONE_SHOVEL: 119, IRON_SHOVEL: 120, DIAMOND_SHOVEL: 121,
   WOOD_SWORD: 122, STONE_SWORD: 123, IRON_SWORD: 124, DIAMOND_SWORD: 125,
   WAND: 126, BROOM: 127, SHIELD: 128,
+  BOW: 129, GOLDEN_APPLE: 130, HEAL_POTION: 131,
+  SHURIKEN: 132, SMOKE_BOMB: 133, HERO_SWORD: 134, FIRE_BOW: 135,
 };
 
 // hardness：生存模式徒手挖掘秒數；<0 不可破壞。
@@ -49,7 +53,7 @@ const DEFS = {
   [B.IRON_ORE]:     { name: '鐵礦', solid: true, hardness: 3.4, tiles: 22, drop: B.IRON_INGOT, toolKind: 'pick' },
   [B.GOLD_ORE]:     { name: '金礦', solid: true, hardness: 3.4, tiles: 23, drop: B.GOLD_INGOT, toolKind: 'pick' },
   [B.DIAMOND_ORE]:  { name: '鑽石礦', solid: true, hardness: 4.0, tiles: 24, drop: B.DIAMOND, toolKind: 'pick' },
-  [B.GLOWSTONE]:    { name: '螢石', solid: true, hardness: 0.5, tiles: 25, emissive: true },
+  [B.GLOWSTONE]:    { name: '螢石', solid: true, hardness: 0.5, tiles: 25, emissive: true, light: true },
   [B.FLOWER_RED]:   { name: '紅花', solid: false, hardness: 0.05, tiles: 26, cross: true },
   [B.FLOWER_YELLOW]:{ name: '黃花', solid: false, hardness: 0.05, tiles: 27, cross: true },
   [B.TALL_GRASS]:   { name: '草叢', solid: false, hardness: 0.05, tiles: 28, cross: true, drop: B.AIR },
@@ -64,6 +68,14 @@ const DEFS = {
   [B.BED]:          { name: '床', solid: true, hardness: 0.4, h: 0.55, tiles: { top: 37, bottom: 11, side: 11 }, toolKind: 'axe' },
   [B.SLAB_STONE]:   { name: '石半磚', solid: true, hardness: 2.0, h: 0.5, tiles: 3, toolKind: 'pick' },
   [B.SLAB_PLANK]:   { name: '木半磚', solid: true, hardness: 1.2, h: 0.5, tiles: 11, toolKind: 'axe' },
+  [B.ICE]:          { name: '冰塊', solid: true, hardness: 0.5, tiles: 94, toolKind: 'pick' },
+  [B.OBSIDIAN]:     { name: '黑曜石', solid: true, hardness: 8.0, tiles: 95, toolKind: 'pick' },
+  [B.IRON_BLOCK]:   { name: '鐵塊', solid: true, hardness: 3.5, tiles: 96, toolKind: 'pick' },
+  [B.GOLD_BLOCK]:   { name: '金塊', solid: true, hardness: 3.0, tiles: 97, toolKind: 'pick' },
+  [B.DIAMOND_BLOCK]:{ name: '鑽石塊', solid: true, hardness: 4.0, tiles: 98, toolKind: 'pick' },
+  [B.BOOKSHELF]:    { name: '書櫃', solid: true, hardness: 1.4, tiles: { top: 11, bottom: 11, side: 99 }, toolKind: 'axe' },
+  [B.PUMPKIN]:      { name: '南瓜', solid: true, hardness: 0.8, tiles: { top: 101, bottom: 101, side: 100 }, toolKind: 'axe' },
+  [B.JACKLANTERN]:  { name: '南瓜燈', solid: true, hardness: 0.8, tiles: { top: 101, bottom: 101, side: 102 }, emissive: true, light: true, toolKind: 'axe' },
   // ---- 物品 ----
   [B.STICK]:        { name: '木棒', item: true, tiles: 60 },
   [B.COAL]:         { name: '煤炭', item: true, tiles: 61 },
@@ -94,6 +106,14 @@ const DEFS = {
   [B.WAND]:   { name: '魔杖', item: true, tiles: 86, cast: 'magic', dmg: 4 },
   [B.BROOM]:  { name: '飛天掃帚', item: true, tiles: 87 },
   [B.SHIELD]: { name: '圓盾', item: true, tiles: 88, cast: 'shield', dmg: 5 },
+  // 遠程武器與消耗品（proj：投射物參數）
+  [B.BOW]:          { name: '弓', item: true, tiles: 103, cast: 'proj', proj: { type: 'arrow', dmg: 6, cool: 0.7 } },
+  [B.GOLDEN_APPLE]: { name: '金蘋果', item: true, tiles: 104, food: 20 },
+  [B.HEAL_POTION]:  { name: '治療藥水', item: true, tiles: 105, food: 10 },
+  [B.SHURIKEN]:     { name: '手裡劍', item: true, tiles: 106, cast: 'proj', proj: { type: 'shuriken', dmg: 5, cool: 0.18 } },
+  [B.SMOKE_BOMB]:   { name: '煙霧彈', item: true, tiles: 107, cast: 'blink' },
+  [B.HERO_SWORD]:   { name: '勇者聖劍', item: true, tiles: 108, dmg: 10 },
+  [B.FIRE_BOW]:     { name: '烈焰弓', item: true, tiles: 109, cast: 'proj', proj: { type: 'firearrow', dmg: 9, cool: 0.9 } },
 };
 
 const HAND_DMG = 2;
@@ -136,8 +156,9 @@ function attackDmg(heldId) {
 const CREATIVE_LIST = [
   B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.STONEBRICK, B.SLAB_STONE, B.SAND, B.SANDSTONE,
   B.GRAVEL, B.LOG, B.PLANK, B.SLAB_PLANK, B.LEAF, B.SPRUCE_LEAF, B.GLASS, B.BRICK,
-  B.SNOW_GRASS, B.SNOW_BLOCK, B.CACTUS, B.COAL_ORE, B.IRON_ORE, B.GOLD_ORE,
-  B.DIAMOND_ORE, B.GLOWSTONE, B.TORCH, B.TNT, B.BED,
+  B.SNOW_GRASS, B.SNOW_BLOCK, B.ICE, B.CACTUS, B.COAL_ORE, B.IRON_ORE, B.GOLD_ORE,
+  B.DIAMOND_ORE, B.OBSIDIAN, B.IRON_BLOCK, B.GOLD_BLOCK, B.DIAMOND_BLOCK,
+  B.BOOKSHELF, B.PUMPKIN, B.JACKLANTERN, B.GLOWSTONE, B.TORCH, B.TNT, B.BED,
   B.WOOL_WHITE, B.WOOL_RED, B.WOOL_BLUE, B.WOOL_YELLOW,
   B.FLOWER_RED, B.FLOWER_YELLOW, B.TALL_GRASS, B.WATER,
 ];
@@ -149,7 +170,8 @@ const ITEM_LIST = [
   B.WOOD_SHOVEL, B.STONE_SHOVEL, B.IRON_SHOVEL, B.DIAMOND_SHOVEL,
   B.WOOD_SWORD, B.STONE_SWORD, B.IRON_SWORD, B.DIAMOND_SWORD,
   B.WAND, B.BROOM, B.SHIELD,
-  B.PORKCHOP, B.BEEF, B.APPLE,
+  B.BOW, B.SHURIKEN, B.SMOKE_BOMB, B.HERO_SWORD, B.FIRE_BOW,
+  B.PORKCHOP, B.BEEF, B.APPLE, B.GOLDEN_APPLE, B.HEAL_POTION,
   B.STICK, B.COAL, B.IRON_INGOT, B.GOLD_INGOT, B.DIAMOND, B.GUNPOWDER,
 ];
 

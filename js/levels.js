@@ -41,6 +41,40 @@ const LEVELS = {
     ],
     outro: '機器人首領倒下了，基地安全了！你是真正的英雄。世界任你探索。',
   },
+  ninja: {
+    id: 'ninja',
+    name: '關卡三：忍者試煉',
+    desc: '成為忍者：手裡劍連發、煙霧瞬身、暗影大師的挑戰！',
+    heroName: '見習忍者',
+    seed: 20260713,
+    hero: { jumpMul: 1.35, speedMul: 1.5, dmgBonus: 2, fallResist: 2.2 },
+    intro: '歡迎來到忍者道場！影之一族入侵了寶塔。你身輕如燕、落地無聲——先到練功台拿起手裡劍！',
+    steps: [
+      { type: 'pickup', item: B.SHURIKEN, count: 1, text: '到中央練功台撿起手裡劍（右鍵快速連發）' },
+      { type: 'kill', mob: 'shadowblade', count: 6, text: '用手裡劍擊敗 6 名影武士（他們速度很快！）', spawn: { mob: 'shadowblade', max: 3 } },
+      { type: 'pickup', item: B.SMOKE_BOMB, count: 1, text: '到寶塔一樓撿起煙霧彈（右鍵往前瞬身 8 格）' },
+      { type: 'reach', point: 'towerTop', r: 4, text: '用瞬身和忍者跳登上寶塔頂！' },
+      { type: 'boss', mob: 'shadowmaster', text: '暗影大師現身——小心他會瞬移到你身後！', spawn: { mob: 'shadowblade', max: 1 } },
+    ],
+    outro: '暗影大師敗退，寶塔恢復了寧靜。你已是真正的忍者高手！',
+  },
+  dragonknight: {
+    id: 'dragonknight',
+    name: '關卡四：屠龍勇士',
+    desc: '成為勇者：聖劍與烈焰弓，討伐天空中的火龍！',
+    heroName: '屠龍勇士',
+    seed: 20260714,
+    hero: { jumpMul: 1.2, speedMul: 1.15, dmgBonus: 2, fallResist: 1.6 },
+    intro: '火龍摧毀了古老要塞，蜥蜴戰士四處作亂！勇者啊，先到石台拔出勇者聖劍吧！',
+    steps: [
+      { type: 'pickup', item: B.HERO_SWORD, count: 1, text: '到中央石台拔出勇者聖劍（近戰超痛！）' },
+      { type: 'kill', mob: 'lizard', count: 6, text: '用聖劍擊敗 6 名蜥蜴戰士', spawn: { mob: 'lizard', max: 3 } },
+      { type: 'pickup', item: B.FIRE_BOW, count: 1, text: '到瞭望塔頂取得烈焰弓（右鍵射火焰箭）' },
+      { type: 'pickup', item: B.GOLD_INGOT, count: 3, text: '找回散落在要塞角落的 3 塊黃金' },
+      { type: 'boss', mob: 'dragon', text: '火龍來了！牠會繞著你飛、噴火球——用烈焰弓射下牠！', spawn: { mob: 'lizard', max: 1 } },
+    ],
+    outro: '火龍墜落，要塞的寶藏與和平都回來了。吟遊詩人會傳唱你的名字！',
+  },
 };
 
 // ---- 建築 ----
@@ -125,6 +159,76 @@ function buildStructure(id, ox, py, oz) {
     drops.push([ox - S + 3.5, py + 1.5, oz + S - 2.5, B.GLOWSTONE]);
     points.boss = [ox + 0.5, py + 1.1, oz + S - 2.5];
     points.playerSpawn = [ox + 0.5, py + 1.1, oz + 6.5];
+  }
+
+  if (id === 'ninja') {
+    const S = 10;
+    fill(blocks, ox - S, py - 1, oz - S, ox + S, py, oz + S, B.STONEBRICK);      // 石庭院
+    fill(blocks, ox - S, py + 1, oz - S, ox + S, py + 20, oz + S, B.AIR);        // 淨空
+    // 低圍牆＋四角南瓜燈
+    for (let i = -S; i <= S; i++) {
+      for (const [wx, wz] of [[i, -S], [i, S], [-S, i], [S, i]]) {
+        fill(blocks, ox + wx, py + 1, oz + wz, ox + wx, py + 2, oz + wz, B.PLANK);
+      }
+    }
+    for (const [cx2, cz2] of [[-S, -S], [S, -S], [-S, S], [S, S]]) {
+      blocks.push([ox + cx2, py + 3, oz + cz2, B.JACKLANTERN]);
+    }
+    // 三層紅寶塔（北側）：磚牆、木半磚屋簷、逐層縮小
+    const pz = oz - 4;
+    const tiers = [[4, 1], [3, 6], [2, 11]]; // [半徑, 起始高度]
+    for (const [r, y0] of tiers) {
+      for (let x = -r; x <= r; x++) for (let z = -r; z <= r; z++) {
+        const edge = Math.abs(x) === r || Math.abs(z) === r;
+        for (let y = y0; y < y0 + 4; y++) {
+          if (edge && !(z === r && Math.abs(x) <= 1 && y <= y0 + 1)) { // 南面留門
+            blocks.push([ox + x, py + y, pz + z, B.BRICK]);
+          }
+        }
+        blocks.push([ox + x, py + y0 + 4, pz + z, B.PLANK]);           // 樓板
+      }
+      for (let x = -r - 1; x <= r + 1; x++) for (const z of [-r - 1, r + 1]) {
+        blocks.push([ox + x, py + y0 + 4, pz + z, B.SLAB_PLANK]);      // 屋簷
+        blocks.push([ox + z, py + y0 + 4, pz + x, B.SLAB_PLANK]);
+      }
+    }
+    blocks.push([ox, py + 16, pz, B.GLOWSTONE]);                        // 塔尖
+    points.towerTop = [ox, py + 16, pz];
+    // 中央練功台（手裡劍）＋一樓煙霧彈
+    fill(blocks, ox - 1, py + 1, oz + 2, ox + 1, py + 1, oz + 4, B.SLAB_PLANK);
+    drops.push([ox + 0.5, py + 2.5, oz + 3.5, B.SHURIKEN]);
+    drops.push([ox + 0.5, py + 2.2, pz + 0.5, B.SMOKE_BOMB]);
+    points.boss = [ox + 0.5, py + 1.1, oz + 6.5];
+    points.playerSpawn = [ox - 6.5, py + 1.1, oz + 6.5];
+  }
+
+  if (id === 'dragonknight') {
+    const S = 12;
+    fill(blocks, ox - S, py - 1, oz - S, ox + S, py, oz + S, B.STONE);           // 地基
+    fill(blocks, ox - S, py + 1, oz - S, ox + S, py + 22, oz + S, B.AIR);        // 淨空
+    // 殘破石磚圍牆（每隔幾格留缺口，像被龍打壞）
+    for (let i = -S; i <= S; i++) {
+      for (const [wx, wz] of [[i, -S], [i, S], [-S, i], [S, i]]) {
+        if ((wx * 7 + wz * 13 + 100) % 9 < 2) continue; // 決定性缺口
+        fill(blocks, ox + wx, py + 1, oz + wz, ox + wx, py + 3, oz + wz, B.STONEBRICK);
+      }
+    }
+    // 中央石台（聖劍）＋黑曜石龍巢瞭望塔（烈焰弓在塔頂）
+    fill(blocks, ox - 1, py + 1, oz - 1, ox + 1, py + 1, oz + 1, B.SLAB_STONE);
+    drops.push([ox + 0.5, py + 2.5, oz + 0.5, B.HERO_SWORD]);
+    const tx = ox - S + 4, tz = oz - S + 4;
+    fill(blocks, tx - 1, py + 1, tz - 1, tx + 1, py + 8, tz + 1, B.OBSIDIAN);
+    fill(blocks, tx - 2, py + 9, tz - 2, tx + 2, py + 9, tz + 2, B.STONEBRICK);  // 塔頂平台
+    blocks.push([tx, py + 10, tz, B.GLOWSTONE]);
+    drops.push([tx + 0.5, py + 10.5, tz + 1.5, B.FIRE_BOW]);
+    // 樓梯（半磚階梯上塔）
+    for (let s = 0; s < 9; s++) blocks.push([tx + 2 + Math.floor(s / 2), py + 8 - s, tz, s % 2 ? B.SLAB_STONE : B.STONE]);
+    // 三塊黃金（要塞角落廢墟）
+    drops.push([ox + S - 2.5, py + 1.5, oz - S + 2.5, B.GOLD_INGOT]);
+    drops.push([ox + S - 2.5, py + 1.5, oz + S - 2.5, B.GOLD_INGOT]);
+    drops.push([ox - S + 2.5, py + 1.5, oz + S - 2.5, B.GOLD_INGOT]);
+    points.boss = [ox + 0.5, py + 14, oz + 0.5]; // 火龍從天而降
+    points.playerSpawn = [ox + 0.5, py + 1.1, oz + 8.5];
   }
 
   return { blocks, drops, points };

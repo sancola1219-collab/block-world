@@ -54,11 +54,12 @@ body {
 }
 
 /* ---------- 全螢幕覆蓋效果 ---------- */
-#overlay-water, #overlay-hurt, #overlay-sleep {
+#overlay-water, #overlay-hurt, #overlay-sleep, #overlay-flash {
   position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.25s;
 }
 #overlay-water { background: rgba(20, 60, 140, 0.35); }
 #overlay-sleep { background: #000; transition: opacity 0.8s; }
+#overlay-flash { background: #dfe8ff; opacity: 0; transition: opacity 0.08s; }
 #overlay-hurt { background: radial-gradient(ellipse at center, transparent 40%, rgba(200,0,0,0.55) 100%); transition: opacity 0.1s; }
 
 /* ---------- 選單面板 ---------- */

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>我的方塊世界</title>
-<link rel="stylesheet" href="./css/style.css?v=4">
+<link rel="stylesheet" href="./css/style.css?v=5">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -23,6 +23,7 @@
 <div id="overlay-water"></div>
 <div id="overlay-hurt"></div>
 <div id="overlay-sleep"></div>
+<div id="overlay-flash"></div>
 
 <div id="touch-ui" style="display:none">
   <div id="look-zone"></div>
@@ -93,8 +94,9 @@
       輕點畫面挖一下．「挖」「放」按鈕長按連續操作<br><br>
       <b>小知識</b><br>
       對的工具挖得快（鎬挖石、斧砍木、鏟挖土）<br>
-      拿食物按右鍵可以吃．火把能照亮洞穴<br>
+      拿食物按右鍵可以吃．火把和南瓜燈能照亮黑夜<br>
       點一下 TNT 會點燃．晚上對床按右鍵可以睡到天亮<br>
+      弓、魔杖、手裡劍：拿在手上按右鍵發射<br>
       小心綠色的苦力怕——牠靠近會爆炸！
     </p>
     <div class="menu-col"><button id="btn-help-back">返回</button></div>
@@ -112,6 +114,8 @@
     <div class="menu-col">
       <button class="btn-level" data-level="wizard">🧙 關卡一：魔法學院　　魔杖、飛天掃帚、大戰黑巫師</button>
       <button class="btn-level" data-level="soldier">🛡 關卡二：超級戰士　　回力圓盾、超級力量、機器人軍團</button>
+      <button class="btn-level" data-level="ninja">🥷 關卡三：忍者試煉　　手裡劍連發、煙霧瞬身、暗影大師</button>
+      <button class="btn-level" data-level="dragonknight">🐉 關卡四：屠龍勇士　　聖劍烈焰弓、討伐噴火巨龍</button>
     </div>
     <p class="tip">世界種子（僅創造/生存，可留空隨機）：<input id="seed-input" type="text" inputmode="numeric" placeholder="隨機"></p>
     <div class="menu-col"><button id="btn-new-back">返回</button></div>
@@ -157,23 +161,24 @@
   </div>
 </div>
 
-<div id="buildtag">block-world v1.2.0</div>
+<div id="buildtag">block-world v1.3.0</div>
 
-<script src="./js/noise.js?v=4"></script>
-<script src="./js/blocks.js?v=4"></script>
-<script src="./js/worldgen.js?v=4"></script>
-<script src="./js/world.js?v=4"></script>
-<script src="./js/mesher.js?v=4"></script>
-<script src="./js/physics.js?v=4"></script>
-<script src="./js/entities.js?v=4"></script>
-<script src="./js/inventory.js?v=4"></script>
-<script src="./js/save.js?v=4"></script>
-<script src="./js/levels.js?v=4"></script>
-<script src="./js/textures.js?v=4"></script>
-<script src="./js/render.js?v=4"></script>
-<script src="./js/audio.js?v=4"></script>
-<script src="./js/input.js?v=4"></script>
-<script src="./js/main.js?v=4"></script>
+<script src="./js/noise.js?v=5"></script>
+<script src="./js/blocks.js?v=5"></script>
+<script src="./js/worldgen.js?v=5"></script>
+<script src="./js/world.js?v=5"></script>
+<script src="./js/mesher.js?v=5"></script>
+<script src="./js/physics.js?v=5"></script>
+<script src="./js/entities.js?v=5"></script>
+<script src="./js/inventory.js?v=5"></script>
+<script src="./js/save.js?v=5"></script>
+<script src="./js/levels.js?v=5"></script>
+<script src="./js/weather.js?v=5"></script>
+<script src="./js/textures.js?v=5"></script>
+<script src="./js/render.js?v=5"></script>
+<script src="./js/audio.js?v=5"></script>
+<script src="./js/input.js?v=5"></script>
+<script src="./js/main.js?v=5"></script>
 <script>
 // 載入看門狗：任一支腳本掛掉時把訊息顯示在載入畫面
 (function () {

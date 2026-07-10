@@ -58,6 +58,10 @@ const MOB_DEFS = {
   darkwizard: { hp: 60, hw: 0.38, hh: 2.3, speed: 2.6, name: '黑巫師', hostile: true, dmg: 4, scale: 1.25, aggro: 40, boss: true },
   robot: { hp: 14, hw: 0.3, hh: 1.85, speed: 2.0, name: '機器人', hostile: true, dmg: 3 },
   robotking: { hp: 80, hw: 0.48, hh: 2.95, speed: 2.2, name: '機器人首領', hostile: true, dmg: 5, scale: 1.6, aggro: 40, boss: true },
+  shadowblade: { hp: 8, hw: 0.28, hh: 1.7, speed: 3.2, name: '影武士', hostile: true, dmg: 2, scale: 0.92 },
+  shadowmaster: { hp: 70, hw: 0.36, hh: 2.2, speed: 2.4, name: '暗影大師', hostile: true, dmg: 4, scale: 1.3, aggro: 40, boss: true, teleports: true },
+  lizard: { hp: 16, hw: 0.32, hh: 1.85, speed: 2.2, name: '蜥蜴戰士', hostile: true, dmg: 3 },
+  dragon: { hp: 150, hw: 1.1, hh: 1.8, speed: 3.0, name: '火龍', hostile: true, dmg: 6, scale: 1.5, aggro: 60, boss: true, fly: true },
 };
 
 function makeMob(type, x, y, z) {
@@ -104,7 +108,45 @@ function stepMob(m, world, dt, player, rand, isNight, events) {
   const dist = Math.hypot(dx, dz);
   let mvx = 0, mvz = 0;
 
+  // 火龍：環繞玩家飛行（不受重力），定時噴火球，貼近咬人
+  if (def.fly) {
+    m.orbitA = (m.orbitA || 0) + dt * 0.55;
+    m.fireCool = (m.fireCool || 2) - dt;
+    const tx = player.x + Math.cos(m.orbitA) * 11;
+    const ty = player.y + 7 + Math.sin(m.age * 0.7) * 2;
+    const tz = player.z + Math.sin(m.orbitA) * 11;
+    const ddx = tx - m.x, ddy = ty - m.y, ddz = tz - m.z;
+    const dd = Math.hypot(ddx, ddy, ddz) || 1;
+    const sp = Math.min(def.speed * 3, dd * 2);
+    m.vx = ddx / dd * sp; m.vy = ddy / dd * sp; m.vz = ddz / dd * sp;
+    m.x += m.vx * dt; m.y += m.vy * dt; m.z += m.vz * dt;
+    m.yaw = Math.atan2(-(dx / (dist || 1)), -(dz / (dist || 1)));
+    m.anim += dt * 7; // 拍翅
+    if (m.fireCool <= 0 && player.hp > 0 && dist < 45) {
+      m.fireCool = 2.4;
+      events.push({ type: 'dragonfire', x: m.x, y: m.y + 0.6, z: m.z });
+    }
+    if (dist < 3 && Math.abs(player.y - m.y) < 3.5 && m.attackCool <= 0) {
+      m.attackCool = 1.2;
+      events.push({ type: 'attack', dmg: def.dmg, x: m.x, z: m.z });
+    }
+    return;
+  }
+
   if (def.hostile && dist < (def.aggro || 24) && player.hp > 0) {
+    // 暗影大師：距離拉開就瞬移到玩家身邊
+    if (def.teleports) {
+      m.tpCool = (m.tpCool === undefined ? 1.5 : m.tpCool) - dt;
+      if (m.tpCool <= 0 && dist > 5) {
+        const a = rand() * Math.PI * 2;
+        m.x = player.x + Math.sin(a) * 2.5;
+        m.z = player.z + Math.cos(a) * 2.5;
+        m.y = player.y + 0.1;
+        m.vx = 0; m.vy = 0; m.vz = 0;
+        m.tpCool = 2.8;
+        events.push({ type: 'poof', x: m.x, z: m.z });
+      }
+    }
     // 追擊（貼身就停下，不鑽進玩家身體）
     const reach = 1.1 + (def.scale ? (def.scale - 1) * 0.6 : 0);
     if (dist > reach) { mvx = dx / (dist || 1); mvz = dz / (dist || 1); }
@@ -159,20 +201,33 @@ function stepMob(m, world, dt, player, rand, isNight, events) {
   m.anim += dt * Math.hypot(m.vx, m.vz) * 3;
 }
 
-// ---- 投射物（魔法彈、回力圓盾） ----
-function makeProjectile(type, x, y, z, dx, dy, dz, dmg) {
-  const speed = type === 'magic' ? 26 : 22;
+// ---- 投射物 ----
+// 玩家用：magic 魔法彈、shield 回力圓盾、arrow 箭、shuriken 手裡劍、firearrow 火焰箭
+// 敵人用：fireball 火龍吐息（hostile=true，打玩家）
+const PROJ_DEFS = {
+  magic: { speed: 26, life: 1.2 },
+  shield: { speed: 22, life: 0.55 }, // 飛 0.55s 後折返
+  arrow: { speed: 30, life: 1.4 },
+  shuriken: { speed: 32, life: 0.9 },
+  firearrow: { speed: 28, life: 1.5 },
+  fireball: { speed: 13, life: 3.5 },
+};
+
+function makeProjectile(type, x, y, z, dx, dy, dz, dmg, hostile) {
+  const pd = PROJ_DEFS[type];
   return {
-    kind: 'proj', type, dmg,
+    kind: 'proj', type, dmg, hostile: !!hostile,
     x, y, z,
-    vx: dx * speed, vy: dy * speed, vz: dz * speed,
-    life: type === 'magic' ? 1.2 : 0.55,   // 圓盾飛 0.55s 後折返
+    vx: dx * pd.speed, vy: dy * pd.speed, vz: dz * pd.speed,
+    life: pd.life,
     returning: false, spin: 0,
     dead: false,
   };
 }
 
-// events 推入 {type:'projhit', mob, dmg, kx, kz}；圓盾回到玩家手上時 dead 且 caught=true
+// events 推入 {type:'projhit', mob, dmg, kx, kz}（打中生物）
+// 或 {type:'projhitplayer', dmg, x, z}（敵方投射物打中玩家）
+// 圓盾回到玩家手上時 dead 且 caught=true
 function stepProjectile(pr, world, dt, player, mobs, events) {
   pr.spin += dt * 18;
   if (pr.returning) {
@@ -188,19 +243,56 @@ function stepProjectile(pr, world, dt, player, mobs, events) {
       else pr.dead = true;
     }
   }
+  // 瞄準輔助：玩家投射物往「前方錐角內最近的敵人」微幅轉向。
+  // 沒有它，繞飛的火龍幾乎打不中（射到的時候牠已經飛走了）。
+  if (!pr.hostile && pr.type !== 'shield' && !pr.returning) {
+    let best = null, bestD = 14;
+    for (const m of mobs) {
+      if (m.hp <= 0 || !MOB_DEFS[m.type].hostile) continue; // 不吸向豬羊牛等友善生物
+      const d = Math.hypot(m.x - pr.x, m.y + m.hh / 2 - pr.y, m.z - pr.z);
+      if (d < bestD) { bestD = d; best = m; }
+    }
+    if (best) {
+      const sp = Math.hypot(pr.vx, pr.vy, pr.vz);
+      const tx = best.x - pr.x, ty = best.y + best.hh / 2 - pr.y, tz = best.z - pr.z;
+      const tl = Math.hypot(tx, ty, tz) || 1;
+      const dot = (pr.vx * tx + pr.vy * ty + pr.vz * tz) / (sp * tl);
+      if (dot > 0.7) { // 約 45° 錐角內才修正，射反方向不會迴轉
+        const k = Math.min(1, 7 * dt);
+        pr.vx += (tx / tl * sp - pr.vx) * k;
+        pr.vy += (ty / tl * sp - pr.vy) * k;
+        pr.vz += (tz / tl * sp - pr.vz) * k;
+        const ns = Math.hypot(pr.vx, pr.vy, pr.vz) || 1;
+        pr.vx *= sp / ns; pr.vy *= sp / ns; pr.vz *= sp / ns;
+      }
+    }
+  }
+
   pr.x += pr.vx * dt; pr.y += pr.vy * dt; pr.z += pr.vz * dt;
 
-  // 撞生物
-  for (const m of mobs) {
-    if (m.hp <= 0 || (pr.hitSet && pr.hitSet.has(m))) continue;
-    const dy = pr.y - (m.y + m.hh / 2);
-    if (Math.hypot(pr.x - m.x, dy, pr.z - m.z) < 0.8 + (MOB_DEFS[m.type].scale || 1) * 0.25) {
-      events.push({ type: 'projhit', mob: m, dmg: pr.dmg, kx: m.x - player.x, kz: m.z - player.z });
-      if (pr.type === 'shield') {
-        pr.returning = true;
-        (pr.hitSet || (pr.hitSet = new Set())).add(m); // 回程不重複打同一隻
-      } else pr.dead = true;
+  if (pr.hostile) {
+    // 敵方投射物：打玩家
+    const dy = pr.y - (player.y + 0.9);
+    if (Math.hypot(pr.x - player.x, dy, pr.z - player.z) < 1.0) {
+      events.push({ type: 'projhitplayer', dmg: pr.dmg, x: pr.x, z: pr.z });
+      pr.dead = true;
       return;
+    }
+  } else {
+    // 撞生物（命中半徑跟著體型走，大隻的比較好打）
+    for (const m of mobs) {
+      if (m.hp <= 0 || (pr.hitSet && pr.hitSet.has(m))) continue;
+      const md = MOB_DEFS[m.type];
+      const hitR = Math.max(0.8 + (md.scale || 1) * 0.25, md.hw * 2);
+      const dy = pr.y - (m.y + m.hh / 2);
+      if (Math.hypot(pr.x - m.x, dy, pr.z - m.z) < hitR) {
+        events.push({ type: 'projhit', mob: m, dmg: pr.dmg, kx: m.x - player.x, kz: m.z - player.z });
+        if (pr.type === 'shield') {
+          pr.returning = true;
+          (pr.hitSet || (pr.hitSet = new Set())).add(m); // 回程不重複打同一隻
+        } else pr.dead = true;
+        return;
+      }
     }
   }
   // 撞方塊

@@ -114,10 +114,39 @@ save.js     存檔編解碼（storage 注入式）
 - **教訓**：`save.js encodeSave` 是欄位白名單——加新存檔欄位時，doSave 給了還不夠，encodeSave 也要加，否則默默丟失（曾漏掉 quest/level/origin/pdrops/spawn）。
 - 命名原則：關卡內容全原創（魔法學院/超級戰士），不用註冊商標詞彙（公開 Pages 的鐵律）。
 
+## v1.3.0 補充
+
+- **mesher 快照優化**：模組層 `SNAP`/`LIGHT_SNAP`（18×18×96，含 1 格邊界）重複使用；
+  方塊逐柱 `TypedArray.set` 拷貝、光照惰性快取。建塊 40ms → 10-15ms。建網格是單執行緒序列呼叫，
+  共用 scratch 陣列安全；若未來搬進 Web Worker 要改成每 worker 一份。
+- **投射物瞄準輔助**：玩家投射物在 45° 錐角內朝最近敵人微幅轉向（`stepProjectile`）。
+  沒有它，繞飛的火龍打不中——改平衡前先想想這條。命中半徑依體型（`max(0.8+scale*0.25, hw*2)`）。
+- **敵方投射物**：`makeProjectile(..., hostile=true)` 打玩家（火龍 fireball）；事件 `projhitplayer`。
+- **飛行魔王**：dragon 不走 moveBox（環繞玩家的目標點漂移），死亡才落地；瞬移魔王 shadowmaster 用 `teleports` 旗標。
+- 光源方塊統一 `def(id).light` 旗標（火把/螢石/南瓜燈），main 的 noteLightChange/rebuildLights 都吃這個。
+
+## 天氣與特效（v1.3.0）
+
+- `js/weather.js`：純邏輯天氣狀態機（node 可測）。type ∈ clear/cloudy/rain/storm；
+  `stepWeather(w, dt, rand)` 平滑推進 precip/cloud/gloom，回傳 true 表示這刻打雷。**降水以雨或雪呈現由呼叫端依生物群系決定**（`biomeAt==='snow'` → 雪）。
+- 天氣在 `main.js tick` 內推進（隨機走 `G.rand`），純視覺不影響玩法。雷聲延遲 0.4–2.6s 播（光比聲快）。
+- 渲染（`render.js`）：雨/雪是相機周圍盒內的告示板小 quad，**位置為時間的解析函式（無狀態、無逐幀積分）**，落下並在盒內環繞包覆；重用 `progFlat`。全雨滿載約 +1.5ms/幀。
+- `main.js renderFrame`：gloom 調暗天空/白晝/縮短霧、flash（閃電）提亮天空並拉 `#overlay-flash` 白幕。
+- **洞穴/室內不下雨**：`playerExposed()` 用天光判斷（skylight ≥ 14）；不見天則 precip 視覺歸零。
+- 碎屑粒子 `G.burst`（挖掘/爆炸）：純視覺、在 tick 內走重力、`spawnBurst()` 用 `Math.random`（不擾動世界 RNG）。
+- 天氣進 存檔（`weather` 欄位，encodeSave 白名單已含）。
+
+### 本版修掉的坑（審查抓到）
+- **mesher 快照 `get()` y<0 要回 BEDROCK**（非 AIR），否則每塊多建 256 個 y=0 底面（看不見卻吃效能）。有測試鎖住。
+- **魔王戰中途存檔→讀檔永久卡關**：存檔不含 mobs，`loadGame` 若停在 boss 步驟必須重置 `bossSpawned/bossKilled`，否則魔王不再出現、任務無法完成。
+- **投射物瞄準輔助只吸向 hostile**：否則箭/手裡劍會轉向豬羊牛。
+- **SAVE_VERSION 升到 2**：舊版（Pages CDN 快取的舊 JS）遇到 v2 存檔會安全拒讀（回「無存檔」）而非把新方塊誤判成空氣；新版仍讀得懂 v1 舊檔（`KNOWN_VERSIONS`）。
+
 ## 版本紀錄
 
 - **v1.0.0**（2026-07-10）：核心引擎＋雙模式＋基礎生物＋存檔。commit 0ad0827 / b02c5b6。
 - **v1.0.2**：設定記憶（音樂開關）、資源 `?v=` 快取參數、GitHub Pages 上線。commit 7699185 / eb9657d。
 - **v1.1.0**：工具/火把/TNT/床/半磚/食物/羊牛苦力怕/合成擴充。commit f5728ca。
 - **v1.2.0**：冒險關卡（魔法學院/超級戰士）、投射物、英雄能力、任務鏈、勝利畫面；創造模式全物品直接拿。22 項測試。
+- **v1.3.0**：忍者/屠龍兩關（飛天火龍、瞬移魔王、敵方火球）、8 種新方塊、弓/手裡劍/煙霧彈/聖劍/烈焰弓/金蘋果/藥水、mesher 快照優化（40→10-15ms）、天氣系統與雨雪雷電/碎屑特效；修 4 個審查確認的坑。28 項測試。
 - 設計文件：`docs/superpowers/specs/2026-07-10-block-world-design.md`

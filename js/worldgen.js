@@ -109,6 +109,7 @@ function generateChunk(seed, cx, cz) {
         const r = N.hash2(seed + 43, wx, wz);
         if (r < 0.010) data[idx(lx, lz, h + 1)] = B.FLOWER_RED;
         else if (r < 0.022) data[idx(lx, lz, h + 1)] = B.FLOWER_YELLOW;
+        else if (r < 0.0235) data[idx(lx, lz, h + 1)] = B.PUMPKIN; // 野生南瓜（可做南瓜燈）
         else if (r < 0.10) data[idx(lx, lz, h + 1)] = B.TALL_GRASS;
       }
     }
