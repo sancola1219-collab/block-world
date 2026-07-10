@@ -21,6 +21,18 @@
   MWInput.attach(canvas);
   const atlasCv = MWTextures.makeAtlas(); // 2D 圖示用
 
+  // 設定記憶（音樂開關等，與世界存檔分開）
+  const SETTINGS_KEY = 'mineworld.settings.v1';
+  function loadSettings() {
+    try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; }
+    catch (e) { return {}; }
+  }
+  function saveSettings(patch) {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(Object.assign(loadSettings(), patch)));
+    } catch (e) { /* 空間不足就算了 */ }
+  }
+
   // ---------- 遊戲狀態 ----------
   const VIEW_R = 6;          // 顯示半徑（區塊）
   const GEN_R = VIEW_R + 1;  // 生成半徑
@@ -747,7 +759,12 @@
   $('btn-music').addEventListener('click', () => {
     MWAudio.setMusic(!MWAudio.isMusicOn());
     $('btn-music').textContent = '音樂：' + (MWAudio.isMusicOn() ? '開' : '關');
+    saveSettings({ music: MWAudio.isMusicOn() });
   });
+  if (loadSettings().music === false) {
+    MWAudio.setMusic(false);
+    $('btn-music').textContent = '音樂：關';
+  }
 
   canvas.addEventListener('click', () => {
     if (G.state === 'playing' && !MWInput.state.locked) MWInput.requestLock();
