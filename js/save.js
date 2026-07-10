@@ -12,8 +12,14 @@ function encodeSave(state) {
     mode: state.mode,
     time: state.time,
     player: state.player,   // {x,y,z,yaw,pitch,hp,air,fly}
+    spawn: state.spawn,     // 重生點
     inv: state.inv,         // serializeInv 的結果
     edits: state.edits,     // world.serializeEdits 的結果
+    // 冒險關卡進度
+    level: state.level !== undefined ? state.level : null,
+    quest: state.quest !== undefined ? state.quest : null,
+    origin: state.origin !== undefined ? state.origin : null,
+    pdrops: state.pdrops || [],
   });
 }
 

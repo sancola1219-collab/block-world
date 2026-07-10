@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>我的方塊世界</title>
-<link rel="stylesheet" href="./css/style.css?v=3">
+<link rel="stylesheet" href="./css/style.css?v=4">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -17,6 +17,7 @@
   <div id="hint"></div>
   <div id="coords"></div>
   <div id="daynight"></div>
+  <div id="quest" style="display:none"></div>
 </div>
 
 <div id="overlay-water"></div>
@@ -104,11 +105,27 @@
   <div class="panel">
     <h2>新的世界</h2>
     <div class="menu-col">
-      <button class="btn-mode" data-mode="creative">創造模式　　自由飛行，無限方塊，盡情蓋！</button>
+      <button class="btn-mode" data-mode="creative">創造模式　　自由飛行，全物品直接拿，盡情蓋！</button>
       <button class="btn-mode" data-mode="survival">生存模式　　挖礦、合成、小心晚上的殭屍！</button>
     </div>
-    <p class="tip">世界種子（可留空隨機）：<input id="seed-input" type="text" inputmode="numeric" placeholder="隨機"></p>
+    <p class="subhead" style="text-align:center">— 冒險關卡（變身主角開始冒險！）—</p>
+    <div class="menu-col">
+      <button class="btn-level" data-level="wizard">🧙 關卡一：魔法學院　　魔杖、飛天掃帚、大戰黑巫師</button>
+      <button class="btn-level" data-level="soldier">🛡 關卡二：超級戰士　　回力圓盾、超級力量、機器人軍團</button>
+    </div>
+    <p class="tip">世界種子（僅創造/生存，可留空隨機）：<input id="seed-input" type="text" inputmode="numeric" placeholder="隨機"></p>
     <div class="menu-col"><button id="btn-new-back">返回</button></div>
+  </div>
+</div>
+
+<div id="victory" class="overlay" style="display:none">
+  <div class="panel">
+    <h1 id="victory-title" style="color:#ffd24a">🏆 關卡完成！</h1>
+    <p class="tip" id="victory-text" style="font-size:15px;line-height:2"></p>
+    <div class="menu-col">
+      <button id="btn-victory-continue">繼續自由探索</button>
+      <button id="btn-victory-title">回標題</button>
+    </div>
   </div>
 </div>
 
@@ -140,22 +157,23 @@
   </div>
 </div>
 
-<div id="buildtag">block-world v1.1.0</div>
+<div id="buildtag">block-world v1.2.0</div>
 
-<script src="./js/noise.js?v=3"></script>
-<script src="./js/blocks.js?v=3"></script>
-<script src="./js/worldgen.js?v=3"></script>
-<script src="./js/world.js?v=3"></script>
-<script src="./js/mesher.js?v=3"></script>
-<script src="./js/physics.js?v=3"></script>
-<script src="./js/entities.js?v=3"></script>
-<script src="./js/inventory.js?v=3"></script>
-<script src="./js/save.js?v=3"></script>
-<script src="./js/textures.js?v=3"></script>
-<script src="./js/render.js?v=3"></script>
-<script src="./js/audio.js?v=3"></script>
-<script src="./js/input.js?v=3"></script>
-<script src="./js/main.js?v=3"></script>
+<script src="./js/noise.js?v=4"></script>
+<script src="./js/blocks.js?v=4"></script>
+<script src="./js/worldgen.js?v=4"></script>
+<script src="./js/world.js?v=4"></script>
+<script src="./js/mesher.js?v=4"></script>
+<script src="./js/physics.js?v=4"></script>
+<script src="./js/entities.js?v=4"></script>
+<script src="./js/inventory.js?v=4"></script>
+<script src="./js/save.js?v=4"></script>
+<script src="./js/levels.js?v=4"></script>
+<script src="./js/textures.js?v=4"></script>
+<script src="./js/render.js?v=4"></script>
+<script src="./js/audio.js?v=4"></script>
+<script src="./js/input.js?v=4"></script>
+<script src="./js/main.js?v=4"></script>
 <script>
 // 載入看門狗：任一支腳本掛掉時把訊息顯示在載入畫面
 (function () {

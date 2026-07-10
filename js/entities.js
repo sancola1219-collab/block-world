@@ -6,7 +6,7 @@
 const PH = (typeof module !== 'undefined') ? require('./physics.js') : window.MWPhysics;
 const BK5 = (typeof module !== 'undefined') ? require('./blocks.js') : window.MWBlocks;
 const { moveBox } = PH;
-const { isLiquid } = BK5;
+const { isLiquid, isSolid } = BK5;
 
 // ---- 掉落物 ----
 function makeDrop(x, y, z, blockId, rand) {
@@ -23,7 +23,7 @@ function makeDrop(x, y, z, blockId, rand) {
 function stepDrop(d, world, dt, player) {
   d.age += dt;
   d.spin += dt * 2;
-  if (d.age > 120) { d.dead = true; return null; }
+  if (d.age > 120 && !d.persistent) { d.dead = true; return null; }
 
   const px = player.x - d.x, py = (player.y + 0.9) - (d.y + 0.1), pz = player.z - d.z;
   const dist = Math.hypot(px, py, pz);
@@ -51,8 +51,13 @@ const MOB_DEFS = {
   pig: { hp: 8, hw: 0.35, hh: 0.9, speed: 1.4, name: '豬' },
   sheep: { hp: 8, hw: 0.4, hh: 1.15, speed: 1.2, name: '羊' },
   cow: { hp: 10, hw: 0.45, hh: 1.3, speed: 1.1, name: '牛' },
-  zombie: { hp: 16, hw: 0.3, hh: 1.85, speed: 2.3, name: '殭屍' },
+  zombie: { hp: 16, hw: 0.3, hh: 1.85, speed: 2.3, name: '殭屍', hostile: true, dmg: 2, burns: true },
   creeper: { hp: 12, hw: 0.3, hh: 1.6, speed: 1.9, name: '苦力怕' },
+  // 冒險關卡敵人
+  minion: { hp: 10, hw: 0.3, hh: 1.85, speed: 2.2, name: '黑暗爪牙', hostile: true, dmg: 2 },
+  darkwizard: { hp: 60, hw: 0.38, hh: 2.3, speed: 2.6, name: '黑巫師', hostile: true, dmg: 4, scale: 1.25, aggro: 40, boss: true },
+  robot: { hp: 14, hw: 0.3, hh: 1.85, speed: 2.0, name: '機器人', hostile: true, dmg: 3 },
+  robotking: { hp: 80, hw: 0.48, hh: 2.95, speed: 2.2, name: '機器人首領', hostile: true, dmg: 5, scale: 1.6, aggro: 40, boss: true },
 };
 
 function makeMob(type, x, y, z) {
@@ -87,25 +92,27 @@ function stepMob(m, world, dt, player, rand, isNight, events) {
     return;
   }
 
-  // 白天殭屍燃燒
-  if (m.type === 'zombie' && !isNight) {
+  const def = MOB_DEFS[m.type];
+
+  // 白天燃燒（殭屍類）
+  if (def.burns && !isNight) {
     m.burning = true;
     if (m.age % 1 < dt) { m.hp -= 3; m.hurtT = 0.3; }
   }
 
-  const def = MOB_DEFS[m.type];
   const dx = player.x - m.x, dz = player.z - m.z;
   const dist = Math.hypot(dx, dz);
   let mvx = 0, mvz = 0;
 
-  if (m.type === 'zombie' && dist < 24 && player.hp > 0) {
+  if (def.hostile && dist < (def.aggro || 24) && player.hp > 0) {
     // 追擊（貼身就停下，不鑽進玩家身體）
-    if (dist > 1.1) { mvx = dx / (dist || 1); mvz = dz / (dist || 1); }
+    const reach = 1.1 + (def.scale ? (def.scale - 1) * 0.6 : 0);
+    if (dist > reach) { mvx = dx / (dist || 1); mvz = dz / (dist || 1); }
     m.yaw = Math.atan2(-(dx / (dist || 1)), -(dz / (dist || 1)));
     const dy = Math.abs((player.y) - m.y);
-    if (dist < 1.5 && dy < 2 && m.attackCool <= 0) {
+    if (dist < reach + 0.5 && dy < 2.5 && m.attackCool <= 0) {
       m.attackCool = 1.1;
-      events.push({ type: 'attack', dmg: 2, x: m.x, z: m.z });
+      events.push({ type: 'attack', dmg: def.dmg || 2, x: m.x, z: m.z });
     }
   } else if (m.type === 'creeper' && dist < 9 && player.hp > 0) {
     // 逼近；貼近時點燃引信，跑遠就熄
@@ -152,6 +159,57 @@ function stepMob(m, world, dt, player, rand, isNight, events) {
   m.anim += dt * Math.hypot(m.vx, m.vz) * 3;
 }
 
+// ---- 投射物（魔法彈、回力圓盾） ----
+function makeProjectile(type, x, y, z, dx, dy, dz, dmg) {
+  const speed = type === 'magic' ? 26 : 22;
+  return {
+    kind: 'proj', type, dmg,
+    x, y, z,
+    vx: dx * speed, vy: dy * speed, vz: dz * speed,
+    life: type === 'magic' ? 1.2 : 0.55,   // 圓盾飛 0.55s 後折返
+    returning: false, spin: 0,
+    dead: false,
+  };
+}
+
+// events 推入 {type:'projhit', mob, dmg, kx, kz}；圓盾回到玩家手上時 dead 且 caught=true
+function stepProjectile(pr, world, dt, player, mobs, events) {
+  pr.spin += dt * 18;
+  if (pr.returning) {
+    const tx = player.x - pr.x, ty = player.y + 1.2 - pr.y, tz = player.z - pr.z;
+    const d = Math.hypot(tx, ty, tz);
+    if (d < 1.0) { pr.dead = true; pr.caught = true; return; }
+    const s = 24 / (d || 1);
+    pr.vx = tx * s; pr.vy = ty * s; pr.vz = tz * s;
+  } else {
+    pr.life -= dt;
+    if (pr.life <= 0) {
+      if (pr.type === 'shield') pr.returning = true;
+      else pr.dead = true;
+    }
+  }
+  pr.x += pr.vx * dt; pr.y += pr.vy * dt; pr.z += pr.vz * dt;
+
+  // 撞生物
+  for (const m of mobs) {
+    if (m.hp <= 0 || (pr.hitSet && pr.hitSet.has(m))) continue;
+    const dy = pr.y - (m.y + m.hh / 2);
+    if (Math.hypot(pr.x - m.x, dy, pr.z - m.z) < 0.8 + (MOB_DEFS[m.type].scale || 1) * 0.25) {
+      events.push({ type: 'projhit', mob: m, dmg: pr.dmg, kx: m.x - player.x, kz: m.z - player.z });
+      if (pr.type === 'shield') {
+        pr.returning = true;
+        (pr.hitSet || (pr.hitSet = new Set())).add(m); // 回程不重複打同一隻
+      } else pr.dead = true;
+      return;
+    }
+  }
+  // 撞方塊
+  if (isSolid(world.getBlock(Math.floor(pr.x), Math.floor(pr.y), Math.floor(pr.z)))) {
+    if (pr.type === 'shield') pr.returning = true;
+    else pr.dead = true;
+  }
+}
+
 function hurtMob(m, dmg, kx, kz) {
   if (m.hp <= 0) return;
   m.hp -= dmg;
@@ -160,7 +218,7 @@ function hurtMob(m, dmg, kx, kz) {
   m.vx += kx / kl * 6; m.vz += kz / kl * 6; m.vy = 5;
 }
 
-const MWEntities = { MOB_DEFS, makeDrop, stepDrop, makeMob, stepMob, hurtMob };
+const MWEntities = { MOB_DEFS, makeDrop, stepDrop, makeMob, stepMob, hurtMob, makeProjectile, stepProjectile };
 if (typeof module !== 'undefined') module.exports = MWEntities;
 if (typeof window !== 'undefined') window.MWEntities = MWEntities;
 })();

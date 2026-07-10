@@ -211,6 +211,22 @@
       { size: [0.44, 0.44, 0.05], at: [0, 1.5, -0.24], tile: 59 },
     ],
   };
+  // 人形敵人共用殭屍骨架、換皮膚：黑暗爪牙/黑巫師（紫袍白眼）、機器人（灰甲紅眼）
+  function humanoid(skin, face, body) {
+    return [
+      { size: [0.22, 0.8, 0.22], pivot: [0.13, 0.8, 0], swing: 1, tile: body },
+      { size: [0.22, 0.8, 0.22], pivot: [-0.13, 0.8, 0], swing: -1, tile: body },
+      { size: [0.52, 0.74, 0.3], at: [0, 1.18, 0], tile: body },
+      { size: [0.18, 0.18, 0.66], at: [0.35, 1.44, -0.3], tile: skin },
+      { size: [0.18, 0.18, 0.66], at: [-0.35, 1.44, -0.3], tile: skin },
+      { size: [0.48, 0.48, 0.48], at: [0, 1.8, 0], tile: skin },
+      { size: [0.46, 0.46, 0.05], at: [0, 1.8, -0.25], tile: face },
+    ];
+  }
+  MODELS.minion = humanoid(92, 93, 92);
+  MODELS.darkwizard = humanoid(92, 93, 92);
+  MODELS.robot = humanoid(90, 91, 90);
+  MODELS.robotking = humanoid(90, 91, 90);
 
   function createRenderer(canvas) {
     const gl = canvas.getContext('webgl2', { antialias: true });
@@ -470,9 +486,11 @@
       const TS = 1 / 16 - 0.008;
 
       for (const mob of sc.mobs) {
+        const ms = mob.scale || 1;
         const base = compose(
           translate(mob.x, mob.y, mob.z),
           rotY(mob.yaw),
+          scale(ms, ms, ms),
           rotZ(mob.deathT ? Math.min(1, mob.deathT / 0.6) * Math.PI / 2 : 0));
         const light = 0.25 + 0.75 * mob.light * (0.22 + 0.78 * sc.day);
         gl.uniform1f(U(progEnt, 'uLight'), Math.min(1, light));

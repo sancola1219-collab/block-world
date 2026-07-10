@@ -76,6 +76,14 @@
     explosion() { noiseBurst(0.8, 0.5, 300); blip(60, 0.6, 'sawtooth', 0.3, 0.4); },
     eat() { noiseBurst(0.07, 0.15, 1000); setTimeout(() => noiseBurst(0.07, 0.15, 900), 130); setTimeout(() => noiseBurst(0.08, 0.14, 800), 270); },
     sleep() { blip(392, 0.5, 'sine', 0.14, 1.0); setTimeout(() => blip(523, 0.8, 'sine', 0.14, 1.0), 350); },
+    magic() { blip(900, 0.18, 'sine', 0.14, 2.2); blip(1350, 0.12, 'triangle', 0.08, 1.6); },
+    throwWhoosh() { noiseBurst(0.14, 0.14, 2600); },
+    victory() {
+      blip(523, 0.25, 'triangle', 0.18, 1.0);
+      setTimeout(() => blip(659, 0.25, 'triangle', 0.18, 1.0), 220);
+      setTimeout(() => blip(784, 0.5, 'triangle', 0.2, 1.0), 440);
+      setTimeout(() => blip(1046, 0.7, 'triangle', 0.2, 1.0), 700);
+    },
   };
 
   // 環境配樂：緩慢的五聲音階琶音

@@ -12,6 +12,7 @@ const PH = require('../js/physics.js');
 const EN = require('../js/entities.js');
 const INV = require('../js/inventory.js');
 const SV = require('../js/save.js');
+const LV = require('../js/levels.js');
 
 const { B } = BK;
 const { CHUNK, WORLD_H, SEA, idx } = WG;
@@ -256,6 +257,69 @@ test('網格：半磚頂面在 0.5、床在 0.55', () => {
   assert.ok(Math.abs(maxY2 - 40.55) < 1e-6, '床頂應在 40.55，實得 ' + maxY2);
 });
 
+test('關卡：資料完整、建築確定性、任務物品都有著落', () => {
+  for (const id of ['wizard', 'soldier']) {
+    const lvl = LV.LEVELS[id];
+    assert.ok(lvl.name && lvl.intro && lvl.outro && lvl.hero, id + ' 關卡欄位缺漏');
+    assert.ok(lvl.steps.length >= 4);
+    const st1 = LV.buildStructure(id, 100, 40, -200);
+    const st2 = LV.buildStructure(id, 100, 40, -200);
+    assert.deepStrictEqual(st1, st2, '建築必須確定性');
+    assert.ok(st1.blocks.length > 500, '建築要有規模');
+    assert.ok(st1.points.playerSpawn && st1.points.boss, '要有出生點與魔王點');
+    // 每個 pickup 步驟的物品，都要有對應的任務掉落物
+    for (const s of lvl.steps) {
+      assert.ok(['pickup', 'collect', 'kill', 'reach', 'boss'].includes(s.type));
+      assert.ok(s.text && s.text.length > 3);
+      if (s.type === 'pickup') {
+        const n = st1.drops.filter(d => d[3] === s.item).length;
+        assert.ok(n >= s.count, `${id}: ${BK.def(s.item).name} 掉落物 ${n} < 需求 ${s.count}`);
+      }
+      if (s.type === 'reach') assert.ok(st1.points[s.point], '缺 reach 目標點');
+      if (s.type === 'kill' || s.type === 'boss') assert.ok(EN.MOB_DEFS[s.mob], '未定義的敵人 ' + s.mob);
+    }
+    // collect 步驟：水晶（鑽石礦）要蓋在建築裡
+    for (const s of lvl.steps.filter(s => s.type === 'collect' && s.item === B.DIAMOND)) {
+      const ores = st1.blocks.filter(b => b[3] === B.DIAMOND_ORE).length;
+      assert.ok(ores >= s.count, '鑽石礦數量不足');
+    }
+  }
+});
+
+test('投射物：魔法彈命中、圓盾折返被接住', () => {
+  const flat = { getBlock: (x, y, z) => (y < 10 ? B.STONE : B.AIR) };
+  const player = PH.createPlayer(0.5, 10, 0.5);
+  const target = EN.makeMob('robot', 0.5, 10, -5.5);
+  // 魔法彈往 -z 射
+  const magic = EN.makeProjectile('magic', 0.5, 11.5, 0.5, 0, 0, -1, 7);
+  const ev = [];
+  for (let i = 0; i < 60 && !magic.dead; i++) EN.stepProjectile(magic, flat, 1 / 60, player, [target], ev);
+  assert.ok(ev.some(e => e.type === 'projhit' && e.dmg === 7), '魔法彈應命中');
+  assert.ok(magic.dead);
+  // 圓盾沒打中東西 → 折返回到玩家手上
+  const shield = EN.makeProjectile('shield', 0.5, 11.5, 0.5, 0, 0, 1, 8);
+  for (let i = 0; i < 300 && !shield.dead; i++) EN.stepProjectile(shield, flat, 1 / 60, player, [], ev);
+  assert.ok(shield.dead && shield.caught, '圓盾應飛回被接住');
+});
+
+test('物理：英雄倍率讓跳躍更高、跑得更快', () => {
+  const flat = { getBlock: (x, y, z) => (y < 10 ? B.STONE : B.AIR) };
+  const input = { mf: 0, ms: 0, jump: false, run: false, up: false, down: false };
+  const jumpPeak = (mods) => {
+    const p = PH.createPlayer(0.5, 10.01, 0.5);
+    p.onGround = true;
+    let peak = 0;
+    for (let i = 0; i < 120; i++) {
+      PH.stepPlayer(p, flat, { ...input, jump: i === 0 }, 1 / 60, 'adventure', mods);
+      peak = Math.max(peak, p.y);
+    }
+    return peak;
+  };
+  const normal = jumpPeak(undefined);
+  const hero = jumpPeak({ jumpMul: 1.55 });
+  assert.ok(hero > normal + 1.0, `英雄跳躍應明顯更高（${normal.toFixed(2)} → ${hero.toFixed(2)}）`);
+});
+
 test('合成：木棒→火把→工具鏈', () => {
   const inv = INV.createInventory();
   INV.addItem(inv, B.LOG, 3);
@@ -308,16 +372,27 @@ test('物品欄：疊加、移除、合成', () => {
 
 test('存檔：編解碼往返與壞檔防護', () => {
   const state = {
-    seed: 12345, mode: 'survival', time: 0.3,
+    seed: 12345, mode: 'adventure', time: 0.3,
     player: { x: 1.5, y: 40, z: -2.5, yaw: 1, pitch: 0.2, hp: 17, air: 10, fly: false },
+    spawn: { x: 1.5, y: 40, z: -2.5 },
     inv: { sel: 2, slots: [0, [B.DIRT, 5]] },
     edits: { '0,0': [100, 3, 200, 0] },
+    level: 'wizard',
+    quest: { step: 2, kills: 3, done: false, bossSpawned: false },
+    origin: [10, 35, -20],
+    pdrops: [[1.5, 36, -18.5, B.BROOM]],
   };
   const o = SV.decodeSave(SV.encodeSave(state));
   assert.ok(o);
   assert.strictEqual(o.seed, 12345);
   assert.strictEqual(o.player.hp, 17);
   assert.deepStrictEqual(o.edits['0,0'], [100, 3, 200, 0]);
+  // 冒險進度必須完整往返（曾因白名單漏欄位而噴掉）
+  assert.strictEqual(o.level, 'wizard');
+  assert.deepStrictEqual(o.quest, { step: 2, kills: 3, done: false, bossSpawned: false });
+  assert.deepStrictEqual(o.origin, [10, 35, -20]);
+  assert.deepStrictEqual(o.pdrops, [[1.5, 36, -18.5, B.BROOM]]);
+  assert.deepStrictEqual(o.spawn, { x: 1.5, y: 40, z: -2.5 });
 
   assert.strictEqual(SV.decodeSave('{broken'), null);
   assert.strictEqual(SV.decodeSave('{"v":999}'), null);

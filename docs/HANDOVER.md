@@ -104,9 +104,20 @@ save.js     存檔編解碼（storage 注入式）
 4. **結構生成**：村莊/地牢。跨區塊決定性生成照 `worldgen.js` 樹的作法（世界座標雜湊＋掃邊界外 N 格）。
 5. **效能**：greedy meshing、Web Worker 生成區塊（要把 worldgen 隔離出 postMessage 介面）。
 
+## 冒險關卡系統（v1.2.0 新增）
+
+- `js/levels.js`：關卡資料（原創內容）＋`buildStructure()` 建築生成（確定性，測試有驗）。
+  任務步驟型別：`pickup / collect / kill / reach / boss`；每步可帶 `spawn:{mob,max}` 敵人配置。
+- 模式 `adventure`：生存規則＋英雄能力（`LEVELS[id].hero` 的 speedMul/jumpMul/dmgBonus/fallResist）。
+- 投射物在 `entities.js`（`makeProjectile/stepProjectile`）：魔法彈直飛、圓盾自動折返回手。
+- 任務進度存於 `G.quest`，建築原點 `G.origin` 存檔後用來重算 `points`（**不要**讀檔時重蓋建築，會蓋掉玩家的改動）。
+- **教訓**：`save.js encodeSave` 是欄位白名單——加新存檔欄位時，doSave 給了還不夠，encodeSave 也要加，否則默默丟失（曾漏掉 quest/level/origin/pdrops/spawn）。
+- 命名原則：關卡內容全原創（魔法學院/超級戰士），不用註冊商標詞彙（公開 Pages 的鐵律）。
+
 ## 版本紀錄
 
 - **v1.0.0**（2026-07-10）：核心引擎＋雙模式＋基礎生物＋存檔。commit 0ad0827 / b02c5b6。
 - **v1.0.2**：設定記憶（音樂開關）、資源 `?v=` 快取參數、GitHub Pages 上線。commit 7699185 / eb9657d。
 - **v1.1.0**：工具/火把/TNT/床/半磚/食物/羊牛苦力怕/合成擴充。commit f5728ca。
+- **v1.2.0**：冒險關卡（魔法學院/超級戰士）、投射物、英雄能力、任務鏈、勝利畫面；創造模式全物品直接拿。22 項測試。
 - 設計文件：`docs/superpowers/specs/2026-07-10-block-world-design.md`

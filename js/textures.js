@@ -221,6 +221,33 @@
     clearTile(68); // 火藥
     for (let i = 0; i < 22; i++) px(68, 3 + ((rand() * 10) | 0), 6 + ((rand() * 7) | 0), rand() < 0.5 ? '#5a5a5a' : '#787878');
 
+    // 86..88 英雄裝備
+    clearTile(86); // 魔杖：深色杖身＋星光杖尖
+    for (let i = 0; i < 9; i++) rect(86, 4 + i, 12 - i, 2, 2, i % 2 ? '#3a2a4a' : '#2c2038');
+    rect(86, 12, 2, 2, 2, '#ffe680'); px(86, 11, 2, '#fff6c0'); px(86, 13, 4, '#fff6c0'); px(86, 12, 1, '#fff6c0');
+    clearTile(87); // 飛天掃帚：長柄＋稻草頭
+    for (let i = 0; i < 9; i++) rect(87, 3 + i, 11 - i, 2, 2, i % 2 ? '#8a6a40' : '#7a5a34');
+    for (let i = 0; i < 5; i++) rect(87, 1 + i, 15 - i, 2, 1, '#d8b060');
+    rect(87, 1, 12, 4, 3, '#c89840'); px(87, 2, 15, '#a87828');
+    clearTile(88); // 圓盾：同心圓環
+    { const [ox, oy] = tilePos(88);
+      ctx.fillStyle = '#c03030'; ctx.beginPath(); ctx.arc(ox + 8, oy + 8, 7, 0, 7); ctx.fill();
+      ctx.fillStyle = '#e8e8ee'; ctx.beginPath(); ctx.arc(ox + 8, oy + 8, 5, 0, 7); ctx.fill();
+      ctx.fillStyle = '#c03030'; ctx.beginPath(); ctx.arc(ox + 8, oy + 8, 3.4, 0, 7); ctx.fill();
+      ctx.fillStyle = '#3050b0'; ctx.beginPath(); ctx.arc(ox + 8, oy + 8, 1.8, 0, 7); ctx.fill(); }
+    clearTile(89); // 魔法彈：發光紫青光球
+    rect(89, 6, 6, 4, 4, '#c0f0ff'); rect(89, 5, 5, 6, 6, 'rgba(140,120,255,0.55)');
+    px(89, 4, 8, 'rgba(140,120,255,0.4)'); px(89, 11, 7, 'rgba(140,120,255,0.4)');
+    px(89, 8, 3, 'rgba(140,120,255,0.4)'); px(89, 7, 12, 'rgba(140,120,255,0.4)');
+    noiseTile(90, 150, 155, 165, 14);                    // 90 機器人裝甲
+    for (let y = 3; y < 16; y += 4) for (let x = 1; x < 16; x += 5) px(90, x, y, '#6a7078'); // 鉚釘
+    noiseTile(91, 150, 155, 165, 8);                     // 91 機器人臉：紅色眼縫
+    rect(91, 3, 5, 10, 2, '#e03030'); rect(91, 5, 10, 6, 1, '#4a4f58');
+    noiseTile(92, 58, 42, 84, 16);                       // 92 黑巫師袍（暗紫）
+    for (let i = 0; i < 6; i++) px(92, (rand() * 16) | 0, (rand() * 16) | 0, '#7a5aa8');
+    noiseTile(93, 58, 42, 84, 8);                        // 93 黑巫師臉：白眼發光
+    rect(93, 4, 5, 3, 2, '#f0f0ff'); rect(93, 9, 5, 3, 2, '#f0f0ff'); rect(93, 6, 10, 4, 1, '#2a1a3a');
+
     // 70..85 工具：柄＋各類頭；材質色 [木, 石, 鐵, 鑽]
     const TIER = ['#8a6a40', '#909090', '#e0e0e6', '#4de0e0'];
     const TIER2 = ['#6a4e2c', '#6e6e6e', '#b8b8c0', '#2ba8b0'];

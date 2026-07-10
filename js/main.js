@@ -2,7 +2,8 @@
 'use strict';
 
 (function () {
-  const { B, def, isSolid, isLiquid, isItem, dropOf, tileOf, digTime, attackDmg, CREATIVE_LIST } = MWBlocks;
+  const { B, def, isSolid, isLiquid, isItem, dropOf, tileOf, digTime, attackDmg, CREATIVE_LIST, ITEM_LIST } = MWBlocks;
+  const { LEVELS, buildStructure } = MWLevels;
   const WG = MWWorldgen;
   const { CHUNK, WORLD_H, SEA } = WG;
   const PH = MWPhysics;
@@ -42,8 +43,10 @@
     world: null, mode: 'creative', seed: 0,
     player: null, inv: null,
     time: 0.30, playedT: 0,
-    drops: [], mobs: [], fuses: [], lights: new Map(),
+    drops: [], mobs: [], fuses: [], lights: new Map(), projectiles: [],
     sleeping: 0,
+    levelId: null, quest: null, hero: null, points: null,
+    castCool: 0, shieldOut: false,
     spawn: { x: 0.5, y: 50, z: 0.5 },
     digTarget: null, digProgress: 0, digCool: 0, placeCool: 0,
     meshed: new Set(), unloadT: 0, autosaveT: 0,
@@ -68,15 +71,20 @@
     return { x: 0.5, y: 70, z: 0.5 };
   }
 
-  function newGame(mode, seed) {
+  function newGame(mode, seed, levelId) {
     G.mode = mode;
-    G.seed = seed;
-    G.world = new MWWorld.World(seed);
+    G.levelId = mode === 'adventure' ? levelId : null;
+    const lvl = G.levelId ? LEVELS[G.levelId] : null;
+    G.seed = lvl ? lvl.seed : seed;
+    G.hero = lvl ? lvl.hero : null;
+    G.quest = lvl ? { step: 0, kills: 0, done: false, bossSpawned: false } : null;
+    G.world = new MWWorld.World(G.seed);
     G.spawn = findSpawn(G.world);
     G.player = PH.createPlayer(G.spawn.x, G.spawn.y, G.spawn.z);
     G.inv = INV.createInventory();
     G.time = 0.30;
     G.drops = []; G.mobs = []; G.fuses = []; G.sleeping = 0;
+    G.projectiles = []; G.shieldOut = false; G.points = null;
     G.meshed.clear();
     G.playedT = 0;
     G.freshSpawn = true;
@@ -88,8 +96,38 @@
     }
   }
 
+  // 把關卡建築蓋進世界；drops 為任務物品（不會消失）
+  function stampLevel(placeDrops) {
+    const lvl = LEVELS[G.levelId];
+    if (!lvl) return;
+    const ox = Math.floor(G.spawn.x), oz = Math.floor(G.spawn.z);
+    const py = G.world.topAt(ox, oz);
+    const st = buildStructure(G.levelId, ox, py, oz);
+    for (const [x, y, z, id] of st.blocks) G.world.setBlock(x, y, z, id);
+    G.points = st.points;
+    G.origin = [ox, py, oz];
+    if (placeDrops) {
+      for (const [x, y, z, id] of st.drops) {
+        const d = EN.makeDrop(x, y, z, id, G.rand);
+        d.persistent = true; d.vx = 0; d.vy = 0; d.vz = 0;
+        G.drops.push(d);
+      }
+    }
+    // 出生點移到關卡指定位置
+    if (st.points.playerSpawn) {
+      const [sx, sy, sz] = st.points.playerSpawn;
+      G.player.x = sx; G.player.y = sy; G.player.z = sz;
+      G.spawn = { x: sx, y: sy, z: sz };
+    }
+    rebuildLights(); // 建築裡的螢石入光源表
+  }
+
   function loadGame(o) {
-    G.mode = o.mode === 'survival' ? 'survival' : 'creative';
+    G.mode = ['survival', 'creative', 'adventure'].includes(o.mode) ? o.mode : 'creative';
+    G.levelId = G.mode === 'adventure' ? o.level : null;
+    const lvl = G.levelId ? LEVELS[G.levelId] : null;
+    G.hero = lvl ? lvl.hero : null;
+    G.quest = lvl ? (o.quest || { step: 0, kills: 0, done: false, bossSpawned: false }) : null;
     G.seed = o.seed;
     G.world = new MWWorld.World(o.seed);
     G.world.loadEdits(o.edits || {});
@@ -102,9 +140,22 @@
     G.inv = INV.deserializeInv(o.inv);
     G.time = o.time || 0.3;
     G.drops = []; G.mobs = []; G.fuses = []; G.sleeping = 0;
+    G.projectiles = []; G.shieldOut = false; G.points = null;
+    // 任務掉落物還原（魔杖/掃帚/核心等還沒撿的）
+    if (Array.isArray(o.pdrops)) {
+      for (const [x, y, z, id] of o.pdrops) {
+        const d = EN.makeDrop(x, y, z, id, G.rand);
+        d.persistent = true; d.vx = 0; d.vy = 0; d.vz = 0;
+        G.drops.push(d);
+      }
+    }
     G.meshed.clear();
     G.playedT = 0;
     G.freshSpawn = false;
+    G.origin = o.origin || null;
+    if (lvl && G.origin) {
+      G.points = buildStructure(G.levelId, G.origin[0], G.origin[1], G.origin[2]).points;
+    }
     rebuildLights();
     MWInput.state.yaw = G.player.yaw;
     MWInput.state.pitch = G.player.pitch;
@@ -114,6 +165,8 @@
     if (!G.world) return false;
     const ok = MWSave.saveTo(localStorage, {
       seed: G.seed, mode: G.mode, time: G.time,
+      level: G.levelId, quest: G.quest, origin: G.origin || null,
+      pdrops: G.drops.filter(d => d.persistent && !d.dead).map(d => [d.x, d.y, d.z, d.blockId]),
       player: {
         x: G.player.x, y: G.player.y, z: G.player.z,
         yaw: MWInput.state.yaw, pitch: MWInput.state.pitch,
@@ -213,7 +266,7 @@
       const id = G.world.getBlock(wx, wy, wz);
       if (id === B.AIR || id === B.BEDROCK || id === B.WATER) continue;
       if (id === B.TNT) { igniteTNT(wx, wy, wz, 0.3 + G.rand() * 0.5, true); continue; } // 連鎖
-      if (G.mode === 'survival' && G.rand() < 0.25) {
+      if (G.mode !== 'creative' && G.rand() < 0.25) {
         const drop = dropOf(id);
         if (drop !== B.AIR) G.drops.push(EN.makeDrop(wx + 0.5, wy + 0.5, wz + 0.5, drop, G.rand));
       }
@@ -229,9 +282,89 @@
     }
   }
 
+  // ---------- 施法與投擲 ----------
+  function castItem(held, dir) {
+    if (G.castCool > 0) return;
+    const p = G.player;
+    const kind = def(held.id).cast;
+    if (kind === 'magic') {
+      const dmg = (G.hero && G.hero.magicDmg) || 6;
+      G.projectiles.push(EN.makeProjectile('magic', p.x, p.y + p.eye - 0.1, p.z, dir[0], dir[1], dir[2], dmg));
+      G.castCool = 0.45;
+      SFX.magic();
+    } else if (kind === 'shield') {
+      if (G.shieldOut) return;
+      const dmg = (G.hero && G.hero.shieldDmg) || 7;
+      G.projectiles.push(EN.makeProjectile('shield', p.x, p.y + p.eye - 0.2, p.z, dir[0], dir[1], dir[2], dmg));
+      G.shieldOut = true;
+      G.castCool = 0.3;
+      SFX.throwWhoosh();
+    }
+  }
+
+  // ---------- 任務系統 ----------
+  function questTick() {
+    const lvl = LEVELS[G.levelId], q = G.quest;
+    const st = lvl.steps[q.step];
+    if (!st) { q.done = true; return; }
+    let done = false;
+    if (st.type === 'pickup' || st.type === 'collect') {
+      done = INV.countOf(G.inv, st.item) >= st.count;
+    } else if (st.type === 'kill') {
+      done = q.kills >= st.count;
+    } else if (st.type === 'reach') {
+      if (G.points && G.points[st.point]) {
+        const [tx, ty, tz] = G.points[st.point];
+        done = Math.hypot(G.player.x - tx, G.player.z - tz) < st.r && G.player.y >= ty - 2;
+      }
+    } else if (st.type === 'boss') {
+      if (!q.bossSpawned && G.points && G.points.boss) {
+        const [bx, by, bz] = G.points.boss;
+        G.mobs.push(EN.makeMob(st.mob, bx, by, bz));
+        q.bossSpawned = true;
+        SFX.zombie();
+        showHint('⚔ ' + st.text, 5000);
+      }
+      done = q.bossKilled === true;
+    }
+    if (done) {
+      q.step++;
+      q.kills = 0;
+      SFX.craft();
+      if (q.step >= lvl.steps.length) {
+        q.done = true;
+        onVictory(lvl);
+      } else {
+        showHint('✅ 任務完成！下一個：' + lvl.steps[q.step].text, 7000);
+      }
+    }
+  }
+
+  function spawnLevelEnemies() {
+    const st = LEVELS[G.levelId].steps[G.quest.step];
+    const cfg = st && st.spawn;
+    if (!cfg) return;
+    if (G.mobs.filter(m => m.type === cfg.mob).length >= cfg.max) return;
+    if (G.rand() >= 0.025) return;
+    const a = G.rand() * Math.PI * 2, r = 9 + G.rand() * 8;
+    const x = Math.floor(G.player.x + Math.cos(a) * r), z = Math.floor(G.player.z + Math.sin(a) * r);
+    const top = G.world.topAt(x, z);
+    if (top > SEA && top < WORLD_H - 4) G.mobs.push(EN.makeMob(cfg.mob, x + 0.5, top + 1.1, z + 0.5));
+  }
+
+  function onVictory(lvl) {
+    G.state = 'victory';
+    MWInput.releaseLock();
+    $('victory-title').textContent = '🏆 ' + lvl.name + '　完成！';
+    $('victory-text').textContent = lvl.outro;
+    $('victory').style.display = 'flex';
+    doSave(true);
+    SFX.victory();
+  }
+
   // ---------- 吃東西與睡覺 ----------
   function tryEat(held) {
-    if (G.mode !== 'survival') return;
+    if (G.mode === 'creative') return;
     const p = G.player;
     if (p.hp >= p.maxHp) { showHint('肚子不餓（血量已滿）', 1500); return; }
     p.hp = Math.min(p.maxHp, p.hp + def(held.id).food);
@@ -282,7 +415,7 @@
     if (G.digCool > 0) G.digCool -= dt;
     if (G.placeCool > 0) G.placeCool -= dt;
 
-    // 移動
+    // 移動（冒險模式套用英雄能力倍率）
     p.yaw = inp.yaw; p.pitch = inp.pitch;
     const axes = MWInput.moveAxes();
     const wasInWater = p.inWater;
@@ -291,13 +424,14 @@
       jump: inp.keys.has('Space'),
       up: inp.keys.has('Space'),
       down: inp.keys.has('ShiftLeft') || inp.keys.has('ShiftRight'),
-    }, dt, G.mode);
+    }, dt, G.mode, G.hero ? { speedMul: G.hero.speedMul, jumpMul: G.hero.jumpMul } : undefined);
     if (!wasInWater && p.inWater && p.vy < -3) SFX.splash();
 
     // 摔傷、溺水、虛空
-    if (G.mode === 'survival') {
-      if (p.fallV < -12.5 && !p.inWater) {
-        damagePlayer(Math.round((-p.fallV - 12.5) * 0.9), null);
+    if (G.mode !== 'creative') {
+      const fallLimit = 12.5 * (G.hero ? G.hero.fallResist : 1);
+      if (p.fallV < -fallLimit && !p.inWater) {
+        damagePlayer(Math.round((-p.fallV - fallLimit) * 0.9), null);
       }
       if (p.headInWater) {
         p.air -= dt;
@@ -309,7 +443,7 @@
       } else { p.air = Math.min(10, p.air + dt * 3); G.drownT = 0; }
     }
     if (p.y < -12) { p.hp = 0; }
-    if (p.hp <= 0 && G.mode === 'survival') { onDeath(); return; }
+    if (p.hp <= 0 && G.mode !== 'creative') { onDeath(); return; }
     if (G.mode === 'creative') p.hp = 20;
 
     // 準星目標
@@ -319,11 +453,11 @@
 
     const held = G.inv.slots[G.inv.sel];
 
-    // 攻擊生物（點擊瞬間優先於挖掘；劍傷害較高）
+    // 攻擊生物（點擊瞬間優先於挖掘；劍傷害較高、英雄有加成）
     if (inp.transient.leftClick) {
       const mob = pickMob(eye, dir);
       if (mob) {
-        EN.hurtMob(mob, attackDmg(held ? held.id : undefined), mob.x - p.x, mob.z - p.z);
+        EN.hurtMob(mob, attackDmg(held ? held.id : undefined) + (G.hero ? G.hero.dmgBonus : 0), mob.x - p.x, mob.z - p.z);
         SFX.attackHit();
         if (mob.type === 'pig') SFX.pig();
         if (mob.type === 'sheep') SFX.sheep();
@@ -358,13 +492,29 @@
       }
     } else { G.digTarget = null; G.digProgress = 0; }
 
-    // 放置 / 睡覺 / 吃東西
+    // 放置 / 睡覺 / 施法投擲 / 吃東西
     const wantPlace = inp.transient.rightClick || (inp.mouseDown[2] && G.placeCool <= 0);
     if (wantPlace) {
       if (ray.hit && ray.id === B.BED) trySleep();
+      else if (held && def(held.id).cast) castItem(held, dir);
       else if (held && def(held.id).food) tryEat(held);
       else if (ray.hit && held && !isItem(held.id)) placeBlock(ray);
       G.placeCool = 0.25;
+    }
+
+    // 投射物（魔法彈、回力圓盾）
+    if (G.castCool > 0) G.castCool -= dt;
+    if (G.projectiles.length) {
+      const pev = [];
+      for (const pr of G.projectiles) EN.stepProjectile(pr, w, dt, p, G.mobs, pev);
+      for (const e of pev) {
+        EN.hurtMob(e.mob, e.dmg, e.kx, e.kz);
+        SFX.attackHit();
+      }
+      G.projectiles = G.projectiles.filter(pr => {
+        if (pr.dead && pr.type === 'shield') G.shieldOut = false;
+        return !pr.dead;
+      });
     }
 
     // TNT 引信
@@ -417,22 +567,38 @@
     }
     const MOB_DROPS = {
       pig: [B.PORKCHOP, 1, 2], sheep: [B.WOOL_WHITE, 1, 2],
-      cow: [B.BEEF, 1, 2], creeper: [B.GUNPOWDER, 2, 2], zombie: null,
+      cow: [B.BEEF, 1, 2], creeper: [B.GUNPOWDER, 2, 2],
+      minion: [B.APPLE, 0, 1], robot: [B.IRON_INGOT, 0, 1],
     };
     for (const e of events) {
-      if (e.type === 'attack' && G.mode === 'survival') damagePlayer(e.dmg, e);
+      if (e.type === 'attack' && G.mode !== 'creative') damagePlayer(e.dmg, e);
       else if (e.type === 'explode') explode(e.x, e.y, e.z, e.r, e.dmg);
       else if (e.type === 'hiss') SFX.hiss();
-      else if (e.type === 'mobdie' && G.mode === 'survival') {
-        const d = MOB_DROPS[e.mob.type];
-        if (d) {
-          const n = d[1] + ((G.rand() * (d[2] - d[1] + 1)) | 0);
-          for (let i = 0; i < n; i++) G.drops.push(EN.makeDrop(e.mob.x, e.mob.y + 0.5, e.mob.z, d[0], G.rand));
+      else if (e.type === 'mobdie') {
+        if (G.mode !== 'creative') {
+          const d = MOB_DROPS[e.mob.type];
+          if (d) {
+            const n = d[1] + ((G.rand() * (d[2] - d[1] + 1)) | 0);
+            for (let i = 0; i < n; i++) G.drops.push(EN.makeDrop(e.mob.x, e.mob.y + 0.5, e.mob.z, d[0], G.rand));
+          }
+        }
+        // 任務擊殺計數
+        if (G.quest && !G.quest.done) {
+          const st = LEVELS[G.levelId].steps[G.quest.step];
+          if (st && st.mob === e.mob.type) {
+            if (st.type === 'kill') G.quest.kills++;
+            if (st.type === 'boss') G.quest.bossKilled = true;
+          }
         }
       }
     }
     G.mobs = G.mobs.filter(m => !m.dead);
-    spawnMobs(sky);
+    if (G.mode === 'adventure' && G.quest && !G.quest.done) {
+      spawnLevelEnemies();
+      questTick();
+    } else {
+      spawnMobs(sky);
+    }
 
     MWInput.clearTransient();
     updateHud();
@@ -440,7 +606,7 @@
 
   function damagePlayer(dmg, src) {
     const p = G.player;
-    if (G.mode !== 'survival' || p.hurtCool > 0 || dmg <= 0) return;
+    if (G.mode === 'creative' || p.hurtCool > 0 || dmg <= 0) return;
     p.hp -= dmg;
     p.hurtCool = 0.6;
     G.hurtFlash = 0.35;
@@ -525,7 +691,7 @@
       showHint('火把要放在方塊上面', 1500);
       return;
     }
-    if (G.mode === 'survival') INV.consumeSlot(G.inv, G.inv.sel);
+    if (G.mode !== 'creative') INV.consumeSlot(G.inv, G.inv.sel);
     G.world.setBlock(tx, ty, tz, id);
     noteLightChange(tx, ty, tz, id, cur);
     SFX.place();
@@ -594,10 +760,17 @@
     };
     const sl = (x, y, z) => Math.min(1, G.world.lightAt(Math.floor(x), Math.floor(y), Math.floor(z)) / 15 + torchAt(x, y, z));
 
-    // 掉落物＋引爆中的 TNT
+    // 掉落物＋引爆中的 TNT＋投射物
     const dropScene = G.drops.map(d => ({ x: d.x, y: d.y, z: d.z, spin: d.spin, tile: tileOf(d.blockId, 'side'), light: sl(d.x, d.y + 0.5, d.z) }));
     for (const f of G.fuses) {
       dropScene.push({ x: f.x, y: f.y, z: f.z, spin: 0, tile: 35, light: 1, flash: 0.35 + 0.35 * Math.sin(f.t * 22), scale: 0.98 });
+    }
+    for (const pr of G.projectiles) {
+      if (pr.type === 'magic') {
+        dropScene.push({ x: pr.x, y: pr.y - 0.15, z: pr.z, spin: pr.spin, tile: 89, light: 1, flash: 0.3, scale: 0.3 });
+      } else {
+        dropScene.push({ x: pr.x, y: pr.y - 0.3, z: pr.z, spin: pr.spin, tile: 88, light: 1, scale: 0.5 });
+      }
     }
 
     renderer.render({
@@ -621,6 +794,7 @@
       mobs: G.mobs.map(m => ({
         type: m.type, x: m.x, y: m.y, z: m.z, yaw: m.yaw, anim: m.anim,
         hurtT: m.hurtT, burning: m.burning, deathT: m.deathT, fuse: m.fuse,
+        scale: EN.MOB_DEFS[m.type].scale || 1,
         light: sl(m.x, m.y + 1, m.z),
       })),
     });
@@ -643,12 +817,26 @@
     const p = G.player;
     hudT++;
     if (hudT % 6 !== 0) return;
-    if (G.mode === 'survival') {
+    if (G.mode !== 'creative') {
       const full = Math.max(0, Math.ceil(p.hp / 2));
       $('hearts').innerHTML = '<span style="color:#e04040">' + '❤'.repeat(full) + '</span><span style="color:#444">' + '❤'.repeat(10 - full) + '</span>';
       $('bubbles').textContent = p.headInWater ? '💧'.repeat(Math.ceil(p.air)) : '';
     } else {
       $('hearts').textContent = ''; $('bubbles').textContent = '';
+    }
+    // 任務橫幅
+    if (G.quest && !G.quest.done) {
+      const lvl = LEVELS[G.levelId];
+      const st = lvl.steps[G.quest.step];
+      if (st) {
+        let prog = '';
+        if (st.type === 'kill') prog = `（${G.quest.kills}/${st.count}）`;
+        else if (st.type === 'pickup' || st.type === 'collect') prog = `（${Math.min(INV.countOf(G.inv, st.item), st.count)}/${st.count}）`;
+        $('quest').textContent = `📜 ${st.text}${prog}`;
+        $('quest').style.display = 'block';
+      }
+    } else {
+      $('quest').style.display = 'none';
     }
     const biome = WG.biomeAt(G.seed, Math.floor(p.x), Math.floor(p.z));
     const bname = { plains: '草原', forest: '森林', desert: '沙漠', snow: '雪原' }[biome] || biome;
@@ -759,7 +947,8 @@
 
     if (G.mode === 'creative') {
       pal.innerHTML = '';
-      for (const id of CREATIVE_LIST) {
+      // 方塊＋全部物品（工具/食物/裝備），創造模式直接拿
+      for (const id of [...CREATIVE_LIST, ...ITEM_LIST]) {
         const div = buildSlotDiv(-1, { id, count: 1 });
         div.addEventListener('click', () => {
           G.inv.slots[G.inv.sel] = { id, count: 64 };
@@ -814,7 +1003,10 @@
     $('title').style.display = 'flex';
     const save = MWSave.loadFrom(localStorage);
     $('btn-continue').disabled = !save;
-    $('title-tip').textContent = save ? `已有存檔：${save.mode === 'survival' ? '生存' : '創造'}模式（種子 ${save.seed}）` : '還沒有存檔，開一個新世界吧！';
+    const modeName = save && (save.mode === 'adventure'
+      ? (LEVELS[save.level] ? LEVELS[save.level].name : '冒險')
+      : (save.mode === 'survival' ? '生存模式' : '創造模式'));
+    $('title-tip').textContent = save ? `已有存檔：${modeName}（種子 ${save.seed}）` : '還沒有存檔，開一個新世界吧！';
   }
 
   async function startWorld() {
@@ -849,10 +1041,16 @@
       p.x = bx + 0.5; p.z = bz + 0.5; p.y = by + 1.05;
       G.spawn = { x: p.x, y: p.y, z: p.z };
     }
+    // 冒險關卡：蓋出關卡建築與任務物品
+    if (G.freshSpawn && G.mode === 'adventure') stampLevel(true);
     $('loading').style.display = 'none';
     G.state = 'playing';
     refreshHotbar();
-    showHint(MWInput.isTouch ? '左搖桿移動，右邊滑動看四周！' : '點擊畫面鎖定滑鼠．WASD 移動．E 物品欄');
+    if (G.mode === 'adventure' && G.quest && !G.quest.done) {
+      showHint('🧙 ' + LEVELS[G.levelId].intro, 10000);
+    } else {
+      showHint(MWInput.isTouch ? '左搖桿移動，右邊滑動看四周！' : '點擊畫面鎖定滑鼠．WASD 移動．E 物品欄');
+    }
     MWAudio.startMusic();
     if (!MWInput.isTouch) MWInput.requestLock();
   }
@@ -896,6 +1094,24 @@
       newGame(btn.dataset.mode, seed);
       startWorld();
     });
+  });
+  document.querySelectorAll('.btn-level').forEach(btn => {
+    btn.addEventListener('click', () => {
+      MWAudio.ensure();
+      newGame('adventure', 0, btn.dataset.level);
+      startWorld();
+    });
+  });
+  $('btn-victory-continue').addEventListener('click', () => {
+    $('victory').style.display = 'none';
+    G.state = 'playing';
+    MWInput.requestLock();
+    showHint('世界任你探索！蓋東西、挖礦、看看遠方吧', 5000);
+  });
+  $('btn-victory-title').addEventListener('click', () => {
+    doSave(true);
+    $('victory').style.display = 'none';
+    showTitle();
   });
   $('btn-continue').addEventListener('click', () => {
     MWAudio.ensure();
@@ -944,11 +1160,17 @@
     }
     if (G.state === 'playing') {
       if (code === 'KeyE' || code === 'Tab') openInv();
-      if (code === 'KeyF' && G.mode === 'creative') {
-        G.player.fly = !G.player.fly;
-        showHint(G.player.fly ? '飛行：開（空白鍵上升、Shift 下降）' : '飛行：關', 2000);
+      const canFly = G.mode === 'creative' ||
+        (G.mode === 'adventure' && INV.countOf(G.inv, B.BROOM) > 0);
+      if (code === 'KeyF') {
+        if (canFly) {
+          G.player.fly = !G.player.fly;
+          showHint(G.player.fly ? (G.mode === 'adventure' ? '🧹 掃帚飛行：開（空白鍵上升、Shift 下降）' : '飛行：開（空白鍵上升、Shift 下降）') : '飛行：關', 2000);
+        } else if (G.mode === 'adventure') {
+          showHint('要先拿到飛天掃帚才能飛！', 2000);
+        }
       }
-      if (code === 'Space' && G.mode === 'creative') {
+      if (code === 'Space' && canFly) {
         const now = performance.now();
         if (now - lastSpace < 280) G.player.fly = !G.player.fly;
         lastSpace = now;

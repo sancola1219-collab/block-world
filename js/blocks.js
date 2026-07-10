@@ -20,6 +20,7 @@ const B = {
   WOOD_AXE: 114, STONE_AXE: 115, IRON_AXE: 116, DIAMOND_AXE: 117,
   WOOD_SHOVEL: 118, STONE_SHOVEL: 119, IRON_SHOVEL: 120, DIAMOND_SHOVEL: 121,
   WOOD_SWORD: 122, STONE_SWORD: 123, IRON_SWORD: 124, DIAMOND_SWORD: 125,
+  WAND: 126, BROOM: 127, SHIELD: 128,
 };
 
 // hardness：生存模式徒手挖掘秒數；<0 不可破壞。
@@ -89,6 +90,10 @@ const DEFS = {
   [B.STONE_SWORD]:    { name: '石劍', item: true, tiles: 83, dmg: 6 },
   [B.IRON_SWORD]:     { name: '鐵劍', item: true, tiles: 84, dmg: 7 },
   [B.DIAMOND_SWORD]:  { name: '鑽石劍', item: true, tiles: 85, dmg: 8 },
+  // 冒險關卡的英雄裝備（創造模式也拿得到）
+  [B.WAND]:   { name: '魔杖', item: true, tiles: 86, cast: 'magic', dmg: 4 },
+  [B.BROOM]:  { name: '飛天掃帚', item: true, tiles: 87 },
+  [B.SHIELD]: { name: '圓盾', item: true, tiles: 88, cast: 'shield', dmg: 5 },
 };
 
 const HAND_DMG = 2;
@@ -137,7 +142,18 @@ const CREATIVE_LIST = [
   B.FLOWER_RED, B.FLOWER_YELLOW, B.TALL_GRASS, B.WATER,
 ];
 
-const MWBlocks = { B, DEFS, HAND_DMG, def, isSolid, isLiquid, isCross, isItem, isOpaque, dropOf, tileOf, digTime, attackDmg, CREATIVE_LIST };
+// 創造模式的物品清單（工具/食物/材料/英雄裝備，全部直接拿）
+const ITEM_LIST = [
+  B.WOOD_PICK, B.STONE_PICK, B.IRON_PICK, B.DIAMOND_PICK,
+  B.WOOD_AXE, B.STONE_AXE, B.IRON_AXE, B.DIAMOND_AXE,
+  B.WOOD_SHOVEL, B.STONE_SHOVEL, B.IRON_SHOVEL, B.DIAMOND_SHOVEL,
+  B.WOOD_SWORD, B.STONE_SWORD, B.IRON_SWORD, B.DIAMOND_SWORD,
+  B.WAND, B.BROOM, B.SHIELD,
+  B.PORKCHOP, B.BEEF, B.APPLE,
+  B.STICK, B.COAL, B.IRON_INGOT, B.GOLD_INGOT, B.DIAMOND, B.GUNPOWDER,
+];
+
+const MWBlocks = { B, DEFS, HAND_DMG, def, isSolid, isLiquid, isCross, isItem, isOpaque, dropOf, tileOf, digTime, attackDmg, CREATIVE_LIST, ITEM_LIST };
 if (typeof module !== 'undefined') module.exports = MWBlocks;
 if (typeof window !== 'undefined') window.MWBlocks = MWBlocks;
 })();

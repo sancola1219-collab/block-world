@@ -86,7 +86,9 @@ function boxIntersectsBlock(b, bx, by, bz) {
 }
 
 // input：{mf(前後 -1..1), ms(左右 -1..1), jump, run, up, down}
-function stepPlayer(p, world, input, dt, mode) {
+// mods：英雄能力倍率 {speedMul, jumpMul}（冒險關卡用，預設 1）
+function stepPlayer(p, world, input, dt, mode, mods) {
+  const mm = mods || {};
   const feet = world.getBlock(Math.floor(p.x), Math.floor(p.y + 0.2), Math.floor(p.z));
   const eyeB = world.getBlock(Math.floor(p.x), Math.floor(p.y + p.eye), Math.floor(p.z));
   p.inWater = isLiquid(feet);
@@ -99,7 +101,7 @@ function stepPlayer(p, world, input, dt, mode) {
   const wl = Math.hypot(wx, wz);
   if (wl > 1) { wx /= wl; wz /= wl; }
 
-  const speed = p.fly ? 11 : (p.inWater ? 3.2 : (input.run ? 5.8 : 4.35));
+  const speed = (p.fly ? 11 : (p.inWater ? 3.2 : (input.run ? 5.8 : 4.35))) * (mm.speedMul || 1);
   const accel = p.onGround || p.fly ? 60 : (p.inWater ? 25 : 18);
 
   p.vx += (wx * speed - p.vx) * Math.min(1, accel * dt / speed * 2);
@@ -116,7 +118,7 @@ function stepPlayer(p, world, input, dt, mode) {
     if (p.vy < -3) p.vy = -3;
   } else {
     p.vy -= GRAVITY * dt;
-    if (input.jump && p.onGround) { p.vy = JUMP_V; p.onGround = false; }
+    if (input.jump && p.onGround) { p.vy = JUMP_V * (mm.jumpMul || 1); p.onGround = false; }
     if (p.vy < -50) p.vy = -50;
   }
 
