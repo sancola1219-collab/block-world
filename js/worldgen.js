@@ -1,6 +1,7 @@
 // 世界生成 — 純邏輯，node 可測。
 // 決定性：任何 (seed, 世界座標) 永遠產生同一結果，跨區塊一致（樹會正確跨界）。
 'use strict';
+(function () { // IIFE：避免傳統 script 頂層 const 撞名
 
 const N = (typeof module !== 'undefined') ? require('./noise.js') : window.MWNoise;
 const BK = (typeof module !== 'undefined') ? require('./blocks.js') : window.MWBlocks;
@@ -164,3 +165,4 @@ function stampTree(seed, t, data, baseX, baseZ) {
 const MWWorldgen = { CHUNK, WORLD_H, SEA, idx, terrainHeight, biomeAt, treeAt, isCave, generateChunk };
 if (typeof module !== 'undefined') module.exports = MWWorldgen;
 if (typeof window !== 'undefined') window.MWWorldgen = MWWorldgen;
+})();

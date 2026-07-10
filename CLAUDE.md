@@ -1,0 +1,50 @@
+# 我的方塊世界 — 開發與審核規範
+
+> Minecraft 風格體素沙盒。純前端、零建置、零外部依賴（連 three.js 都沒有，手寫 WebGL2）。
+> 雙擊 `index.html` 離線即玩；開發用 `npx http-server -p 8127 .` 或 `.claude/launch.json` 的 preview。
+> 設計文件：`docs/superpowers/specs/2026-07-10-block-world-design.md`
+
+## 架構
+
+- **邏輯層（node 可測，不碰瀏覽器）**：`js/noise.js`（雜湊/噪聲）→ `js/blocks.js`（方塊表）→
+  `js/worldgen.js`（地形/生物群系/洞穴/礦/樹）→ `js/world.js`（區塊儲存/天光/編輯追蹤）→
+  `js/mesher.js`（網格+AO）；`js/physics.js`（AABB/DDA）、`js/entities.js`（豬/殭屍/掉落物）、
+  `js/inventory.js`（36格+合成）、`js/save.js`（存檔編解碼）。
+- **瀏覽器層**：`js/textures.js`（Canvas 程序材質圖集 256×256）、`js/render.js`（WebGL2）、
+  `js/audio.js`（WebAudio 合成）、`js/input.js`（鍵鼠+觸控）、`js/main.js`（狀態機/60Hz/串流/UI）。
+
+## 鐵律（沿用 3D遊戲模板）
+
+1. 遊戲狀態只在 60Hz 固定時步 `tick()` 內改變；rAF 只渲染。
+2. 邏輯層檔案不碰 DOM/window（`typeof module` 雙載入模式，node 直接 require）。
+3. **每支邏輯檔都包在 IIFE 裡**——傳統 script 頂層 `const` 共用全域詞法環境，
+   不包會跨檔撞名（`B`、`CHUNK`…）整支掛掉。新檔比照辦理。
+4. 隨機一律 `mulberry32` / 座標雜湊；同種子同世界。跨區塊結構（樹）必須由世界座標決定性生成。
+5. 座標：x 東、z 南、y 上；yaw=0 面向 −z；`世界高 96、海平面 32、區塊 16×16`。
+6. 觸控＝合成輸入（搖桿走 `touchMove`、按鈕合成 keydown/mouse），不另寫邏輯分支。
+
+## 常數速查
+
+- 方塊 id 與貼圖 tile 對照在 `blocks.js`；裂痕 tile 40–47、生物皮膚 48+；圖集 16×16 格、每格 16px。
+- 網格頂點格式 stride 7：`x,y,z,u,v,sky,shade`；`sky=2.0` 表示自發光（螢石）。
+- 存檔 key `mineworld.save.v1`（localStorage）：種子＋方塊差異＋玩家＋物品欄。
+
+## 測試與驗證
+
+- `node --test`：14 項（噪聲決定性、地形、區塊、天光、網格面數、物理、DDA、實體、物品欄、存檔）。
+- 瀏覽器自動驗證用 `window.__mw`：`{G, tick, step, chunkWork, renderFrame, doSave, newGame, loadGame, skyState, renderer}`。
+  隱藏分頁 rAF 停擺：先 `cv.width=800; cv.height=450` 再手動 `renderFrame()`，用 `gl.readPixels` 取樣驗色。
+- 合成 tick 一律 `mw.tick(1/60)` 迴圈驅動；輸入用 `MWInput.state`（`keys.add('KeyW')`、`mouseDown[0]`、`transient.*`）。
+
+## 已知陷阱
+
+- 隱藏分頁：rAF 停、setTimeout 節流 1s+。載入流程已在 `document.hidden` 時改同步跑；別拆。
+- 挖掘進度以 `hardness` 秒計（石頭 2.2s＝132 tick），自動測試記得跑夠 tick。
+- 出生點：地形高度可能被洞穴挖穿，`startWorld` 會掃鄰柱找未挖穿的落點（`freshSpawn` 旗標）。
+- 區塊網格單塊建置約 40ms，串流時每幀最多蓋一塊（預算 7ms 是「超過就停」不是硬上限）。
+- Pointer Lock：Esc 後 ~1.35s 冷卻，`requestPointerLock()` 的 Promise 要 catch（已處理，勿簡化）。
+
+## 工作流程
+
+- 改邏輯 → `node --test` 全綠才 commit；改視覺 → readPixels 取樣驗證。
+- commit：每完成一個任務就 commit，繁中訊息。

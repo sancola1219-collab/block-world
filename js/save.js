@@ -1,5 +1,6 @@
 // 存檔編解碼 — 純邏輯，node 可測（storage 由呼叫端注入，瀏覽器用 localStorage）。
 'use strict';
+(function () { // IIFE：避免傳統 script 頂層 const 撞名
 
 const SAVE_VERSION = 1;
 const SAVE_KEY = 'mineworld.save.v1';
@@ -46,3 +47,4 @@ function clearSave(storage) {
 const MWSave = { SAVE_VERSION, SAVE_KEY, encodeSave, decodeSave, saveTo, loadFrom, clearSave };
 if (typeof module !== 'undefined') module.exports = MWSave;
 if (typeof window !== 'undefined') window.MWSave = MWSave;
+})();

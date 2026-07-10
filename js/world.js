@@ -1,5 +1,6 @@
 // 世界（區塊儲存、方塊存取、天光、玩家改動追蹤）— 純邏輯，node 可測。
 'use strict';
+(function () { // IIFE：避免傳統 script 頂層 const 撞名
 
 const WG = (typeof module !== 'undefined') ? require('./worldgen.js') : window.MWWorldgen;
 const BK2 = (typeof module !== 'undefined') ? require('./blocks.js') : window.MWBlocks;
@@ -133,3 +134,4 @@ class World {
 const MWWorld = { World };
 if (typeof module !== 'undefined') module.exports = MWWorld;
 if (typeof window !== 'undefined') window.MWWorld = MWWorld;
+})();

@@ -1,6 +1,7 @@
 // 物理與射線 — 純邏輯，node 可測。
 // 座標：x 向東、z 向南、y 向上；yaw=0 面向 -z。
 'use strict';
+(function () { // IIFE：避免傳統 script 頂層 const 撞名
 
 const BK4 = (typeof module !== 'undefined') ? require('./blocks.js') : window.MWBlocks;
 const { isSolid, isLiquid } = BK4;
@@ -162,3 +163,4 @@ function lookDir(yaw, pitch) {
 const MWPhysics = { GRAVITY, JUMP_V, createPlayer, moveBox, boxIntersectsBlock, stepPlayer, raycast, lookDir };
 if (typeof module !== 'undefined') module.exports = MWPhysics;
 if (typeof window !== 'undefined') window.MWPhysics = MWPhysics;
+})();

@@ -1,6 +1,7 @@
 // 噪聲與隨機 — 純邏輯，node 可測。
 // 同一種子必產生同一世界：一切隨機都經 mulberry32 或座標雜湊。
 'use strict';
+(function () { // IIFE：避免傳統 script 頂層 const 撞名
 
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -71,3 +72,4 @@ function fbm3(seed, x, y, z, octaves, lacunarity, gain) {
 const MWNoise = { mulberry32, hash2, hash3, valueNoise2, valueNoise3, fbm2, fbm3 };
 if (typeof module !== 'undefined') module.exports = MWNoise;
 if (typeof window !== 'undefined') window.MWNoise = MWNoise;
+})();

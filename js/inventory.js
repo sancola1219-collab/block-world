@@ -1,6 +1,7 @@
 // 物品欄與合成 — 純邏輯，node 可測。
 // 36 格：0..8 快捷欄、9..35 背包。每格 null 或 {id, count}（count ≤ 64）。
 'use strict';
+(function () { // IIFE：避免傳統 script 頂層 const 撞名
 
 const BK6 = (typeof module !== 'undefined') ? require('./blocks.js') : window.MWBlocks;
 const { B } = BK6;
@@ -112,3 +113,4 @@ function deserializeInv(obj) {
 const MWInv = { MAX_STACK, SLOTS, createInventory, addItem, countOf, removeItem, consumeSlot, swapSlots, RECIPES, canCraft, craft, serializeInv, deserializeInv };
 if (typeof module !== 'undefined') module.exports = MWInv;
 if (typeof window !== 'undefined') window.MWInv = MWInv;
+})();

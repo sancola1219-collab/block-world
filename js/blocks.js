@@ -2,6 +2,7 @@
 // tile: 圖集格編號（16x16 圖集，由 textures.js 依同一編號繪製）。
 // 每方塊 tiles = {top, bottom, side} 或單一數字（六面同圖）。
 'use strict';
+(function () { // IIFE：避免傳統 script 頂層 const 撞名
 
 const B = {
   AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, COBBLE: 4, STONEBRICK: 5,
@@ -81,3 +82,4 @@ const CREATIVE_LIST = [
 const MWBlocks = { B, DEFS, def, isSolid, isLiquid, isCross, isOpaque, dropOf, tileOf, CREATIVE_LIST };
 if (typeof module !== 'undefined') module.exports = MWBlocks;
 if (typeof window !== 'undefined') window.MWBlocks = MWBlocks;
+})();

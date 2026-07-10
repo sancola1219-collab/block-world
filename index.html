@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>我的方塊世界</title>
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div id="crosshair">+</div>
+  <div id="hearts"></div>
+  <div id="bubbles"></div>
+  <div id="hotbar"><canvas id="hotbar-canvas" width="470" height="54"></canvas></div>
+  <div id="hint"></div>
+  <div id="coords"></div>
+  <div id="daynight"></div>
+</div>
+
+<div id="overlay-water"></div>
+<div id="overlay-hurt"></div>
+
+<div id="touch-ui" style="display:none">
+  <div id="look-zone"></div>
+  <div id="stick"><div id="stick-knob"></div></div>
+  <div id="tbtn-pause" class="tbtn" data-code="Escape">⏸</div>
+  <div id="tbtn-inv" class="tbtn" data-code="KeyE">物品</div>
+  <div id="tcluster">
+    <div class="tbtn" data-code="Space">跳</div>
+    <div class="tbtn tbig" data-mouse="0">挖</div>
+    <div class="tbtn tbig" data-mouse="2">放</div>
+    <div class="tbtn" data-code="ShiftLeft">降</div>
+    <div class="tbtn" data-code="KeyF">飛</div>
+  </div>
+</div>
+
+<div id="inv" class="overlay" style="display:none">
+  <div class="panel inv-panel">
+    <h2 id="inv-title">物品欄</h2>
+    <div id="palette-wrap">
+      <p class="subhead">方塊選單（點一下放入快捷欄）</p>
+      <div id="palette"></div>
+    </div>
+    <p class="subhead">背包</p>
+    <div id="inv-grid"></div>
+    <p class="subhead">快捷欄</p>
+    <div id="inv-hotbar"></div>
+    <div id="craft-wrap">
+      <p class="subhead">合成</p>
+      <div id="recipes"></div>
+    </div>
+    <p class="tip">E 或 Esc 關閉．點兩個格子可交換</p>
+  </div>
+</div>
+
+<div id="pause" class="overlay" style="display:none">
+  <div class="panel">
+    <h1>暫停</h1>
+    <div class="menu-col">
+      <button id="btn-resume">繼續遊戲</button>
+      <button id="btn-save">儲存世界</button>
+      <button id="btn-music">音樂：開</button>
+      <button id="btn-quit">存檔並回標題</button>
+    </div>
+    <p class="tip" id="save-msg"></p>
+  </div>
+</div>
+
+<div id="death" class="overlay" style="display:none">
+  <div class="panel">
+    <h1 class="death-title">你死了！</h1>
+    <p class="tip">別擔心，蓋好的東西都還在</p>
+    <div class="menu-col">
+      <button id="btn-respawn">重生</button>
+    </div>
+  </div>
+</div>
+
+<div id="help" class="overlay" style="display:none">
+  <div class="panel">
+    <h2>操作說明</h2>
+    <p class="tip" style="line-height:2.1;text-align:left">
+      <b>電腦</b><br>
+      WASD 移動．滑鼠 視角．空白鍵 跳躍．Shift 奔跑<br>
+      左鍵（按住）挖掘．右鍵 放置．滾輪/數字鍵 選方塊<br>
+      E 物品欄與合成．F 飛行（創造模式）．Esc 暫停<br><br>
+      <b>手機</b><br>
+      左搖桿移動（推滿奔跑）．右半畫面滑動轉視角<br>
+      輕點畫面挖一下．「挖」「放」按鈕長按連續操作
+    </p>
+    <div class="menu-col"><button id="btn-help-back">返回</button></div>
+  </div>
+</div>
+
+<div id="newworld" class="overlay" style="display:none">
+  <div class="panel">
+    <h2>新的世界</h2>
+    <div class="menu-col">
+      <button class="btn-mode" data-mode="creative">創造模式　　自由飛行，無限方塊，盡情蓋！</button>
+      <button class="btn-mode" data-mode="survival">生存模式　　挖礦、合成、小心晚上的殭屍！</button>
+    </div>
+    <p class="tip">世界種子（可留空隨機）：<input id="seed-input" type="text" inputmode="numeric" placeholder="隨機"></p>
+    <div class="menu-col"><button id="btn-new-back">返回</button></div>
+  </div>
+</div>
+
+<div id="title" class="overlay" style="display:none">
+  <div class="panel">
+    <h1 class="game-title">我的方塊世界</h1>
+    <p class="subtitle">無限世界．挖掘與建造．日夜與生物</p>
+    <div class="menu-col">
+      <button id="btn-continue">繼續遊戲</button>
+      <button id="btn-new">新的世界</button>
+      <button id="btn-help">操作說明</button>
+    </div>
+    <p class="tip" id="title-tip"></p>
+  </div>
+</div>
+
+<div id="loading" class="overlay">
+  <div class="panel">
+    <h1 class="game-title">我的方塊世界</h1>
+    <p class="tip" id="loading-tip">載入中…</p>
+    <div id="loadbar"><div id="loadbar-fill"></div></div>
+  </div>
+</div>
+
+<div id="error" class="overlay" style="display:none">
+  <div class="panel">
+    <h1>無法啟動</h1>
+    <p class="tip">你的瀏覽器不支援 WebGL2，無法執行本遊戲。<br>請改用較新的 Chrome / Edge / Firefox。</p>
+  </div>
+</div>
+
+<div id="buildtag">block-world v1.0.0</div>
+
+<script src="./js/noise.js"></script>
+<script src="./js/blocks.js"></script>
+<script src="./js/worldgen.js"></script>
+<script src="./js/world.js"></script>
+<script src="./js/mesher.js"></script>
+<script src="./js/physics.js"></script>
+<script src="./js/entities.js"></script>
+<script src="./js/inventory.js"></script>
+<script src="./js/save.js"></script>
+<script src="./js/textures.js"></script>
+<script src="./js/render.js"></script>
+<script src="./js/audio.js"></script>
+<script src="./js/input.js"></script>
+<script src="./js/main.js"></script>
+<script>
+// 載入看門狗：任一支腳本掛掉時把訊息顯示在載入畫面
+(function () {
+  window.addEventListener('error', function (e) {
+    var tip = document.getElementById('loading-tip');
+    var loading = document.getElementById('loading');
+    if (tip && loading && loading.style.display !== 'none') {
+      tip.textContent = '載入失敗：' + (e.message || '未知錯誤');
+    }
+  });
+  setTimeout(function () {
+    var loading = document.getElementById('loading');
+    var tip = document.getElementById('loading-tip');
+    if (loading && loading.style.display !== 'none' && tip && tip.textContent === '載入中…') {
+      tip.textContent = '載入逾時：請重新整理，或更新瀏覽器後再試';
+    }
+  }, 15000);
+})();
+</script>
+</body>
+</html>

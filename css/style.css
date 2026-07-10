@@ -1,0 +1,150 @@
+/* 我的方塊世界 — UI 樣式 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+body {
+  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  color: #eee;
+  -webkit-user-select: none; user-select: none;
+  touch-action: none;
+}
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#crosshair {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -52%);
+  font-size: 22px; color: rgba(255,255,255,0.85); text-shadow: 0 0 3px #000;
+}
+#hotbar {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+}
+#hotbar canvas { display: block; image-rendering: pixelated; }
+#hearts {
+  position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%);
+  font-size: 18px; letter-spacing: 2px; text-shadow: 0 1px 2px #000;
+}
+#bubbles {
+  position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
+  font-size: 16px; letter-spacing: 2px; text-shadow: 0 1px 2px #000;
+}
+#hint {
+  position: absolute; left: 50%; top: 58%; transform: translateX(-50%);
+  font-size: 15px; color: #fff; text-shadow: 0 1px 3px #000;
+  background: rgba(0,0,0,0.35); padding: 4px 14px; border-radius: 6px;
+  opacity: 0; transition: opacity 0.4s;
+}
+#hint.show { opacity: 1; }
+#coords {
+  position: absolute; left: 10px; top: 8px; font-size: 12px;
+  color: rgba(255,255,255,0.75); text-shadow: 0 1px 2px #000;
+}
+#daynight {
+  position: absolute; right: 10px; top: 8px; font-size: 13px;
+  color: rgba(255,255,255,0.85); text-shadow: 0 1px 2px #000;
+}
+#buildtag {
+  position: fixed; right: 6px; bottom: 4px; font-size: 10px;
+  color: rgba(255,255,255,0.4); pointer-events: none; z-index: 60;
+}
+
+/* ---------- 全螢幕覆蓋效果 ---------- */
+#overlay-water, #overlay-hurt {
+  position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.25s;
+}
+#overlay-water { background: rgba(20, 60, 140, 0.35); }
+#overlay-hurt { background: radial-gradient(ellipse at center, transparent 40%, rgba(200,0,0,0.55) 100%); transition: opacity 0.1s; }
+
+/* ---------- 選單面板 ---------- */
+.overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 16, 0.72);
+}
+.panel {
+  background: #1d2330; border: 2px solid #3a4a66; border-radius: 12px;
+  padding: 26px 34px; text-align: center;
+  max-width: min(92vw, 560px); max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+}
+.game-title { font-size: 34px; margin-bottom: 6px; color: #8fd45e; text-shadow: 2px 2px 0 #2a4d1a; }
+.subtitle { color: #9ab; margin-bottom: 14px; font-size: 14px; }
+.death-title { color: #e05050; font-size: 32px; margin-bottom: 8px; }
+.panel h2 { margin-bottom: 14px; color: #cde; }
+.menu-col { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+button {
+  font-family: inherit; font-size: 16px; padding: 10px 22px;
+  background: #33415c; color: #eef; border: 2px solid #4a5f85; border-radius: 8px;
+  cursor: pointer; transition: background 0.15s;
+}
+button:hover:not(:disabled) { background: #40527a; }
+button:disabled { opacity: 0.4; cursor: default; }
+.tip { font-size: 13px; color: #9ab; margin-top: 8px; line-height: 1.8; }
+.subhead { font-size: 13px; color: #8fa5c8; margin: 10px 0 4px; text-align: left; }
+#seed-input {
+  font-family: inherit; font-size: 14px; width: 130px; margin-left: 6px;
+  background: #12161f; color: #eee; border: 1px solid #4a5f85; border-radius: 6px; padding: 5px 8px;
+}
+#loadbar {
+  width: 260px; height: 12px; margin: 12px auto 0;
+  background: #12161f; border: 1px solid #4a5f85; border-radius: 6px; overflow: hidden;
+}
+#loadbar-fill { width: 0%; height: 100%; background: #8fd45e; transition: width 0.2s; }
+
+/* ---------- 物品欄 ---------- */
+.inv-panel { min-width: min(92vw, 540px); }
+#inv-grid, #inv-hotbar, #palette {
+  display: grid; grid-template-columns: repeat(9, 46px); gap: 4px; justify-content: center;
+}
+#palette { grid-template-columns: repeat(8, 46px); max-height: 160px; overflow-y: auto; }
+.slot {
+  width: 46px; height: 46px; background: #12161f;
+  border: 2px solid #3a4a66; border-radius: 6px; position: relative; cursor: pointer;
+}
+.slot:hover { border-color: #7fa0d0; }
+.slot.selected { border-color: #ffd24a; }
+.slot.swap-src { border-color: #8fd45e; }
+.slot canvas { position: absolute; inset: 2px; width: 38px; height: 38px; image-rendering: pixelated; }
+.slot .cnt {
+  position: absolute; right: 3px; bottom: 1px; font-size: 12px; font-weight: bold;
+  color: #fff; text-shadow: 1px 1px 0 #000; pointer-events: none;
+}
+.recipe {
+  display: flex; align-items: center; gap: 8px; justify-content: space-between;
+  background: #12161f; border: 1px solid #3a4a66; border-radius: 8px;
+  padding: 6px 10px; margin: 4px 0;
+}
+.recipe .rname { font-size: 14px; }
+.recipe .rin { font-size: 12px; color: #9ab; flex: 1; text-align: left; }
+.recipe button { font-size: 13px; padding: 5px 14px; }
+.recipe button:disabled { opacity: 0.35; }
+
+/* ---------- 觸控 ---------- */
+#touch-ui { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
+#look-zone { position: absolute; top: 0; right: 0; width: 55%; height: 100%; pointer-events: auto; }
+#stick {
+  position: absolute; left: 26px; bottom: 90px; width: 110px; height: 110px;
+  border-radius: 50%; background: rgba(255,255,255,0.10); border: 2px solid rgba(255,255,255,0.25);
+  pointer-events: auto;
+}
+#stick-knob {
+  position: absolute; left: 50%; top: 50%; width: 48px; height: 48px;
+  margin: -24px 0 0 -24px; border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+}
+.tbtn {
+  position: relative; width: 58px; height: 58px; border-radius: 50%;
+  background: rgba(255,255,255,0.14); border: 2px solid rgba(255,255,255,0.3);
+  color: #fff; font-size: 15px; display: flex; align-items: center; justify-content: center;
+  pointer-events: auto; text-shadow: 0 1px 2px #000;
+}
+.tbtn.active { background: rgba(255,210,74,0.45); }
+.tbtn.tbig { width: 68px; height: 68px; font-size: 18px; }
+#tbtn-pause { position: absolute; left: 12px; top: 10px; width: 44px; height: 44px; }
+#tbtn-inv { position: absolute; right: 12px; top: 10px; width: 52px; height: 52px; font-size: 13px; }
+#tcluster {
+  position: absolute; right: 18px; bottom: 84px;
+  display: grid; grid-template-columns: repeat(2, auto); gap: 10px;
+  justify-items: center; align-items: center;
+}
+body.is-touch #touch-ui { display: block !important; }
+body.is-touch #crosshair { top: 50%; }

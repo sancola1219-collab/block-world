@@ -2,6 +2,7 @@
 // 頂點格式（stride 7 float）：x,y,z, u,v, sky(0..1；2.0=自發光), shade(面向陰影×AO)
 // 輸出三組：solid（不透明、背面剔除）、cutout（樹葉/玻璃/十字花草、不剔除）、water（半透明）
 'use strict';
+(function () { // IIFE：避免傳統 script 頂層 const 撞名
 
 const WG2 = (typeof module !== 'undefined') ? require('./worldgen.js') : window.MWWorldgen;
 const BK3 = (typeof module !== 'undefined') ? require('./blocks.js') : window.MWBlocks;
@@ -133,3 +134,4 @@ function buildChunkMesh(world, cx, cz) {
 const MWMesher = { buildChunkMesh, FACES };
 if (typeof module !== 'undefined') module.exports = MWMesher;
 if (typeof window !== 'undefined') window.MWMesher = MWMesher;
+})();

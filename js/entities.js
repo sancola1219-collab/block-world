@@ -1,6 +1,7 @@
 // 實體：掉落物、豬、殭屍 — 純邏輯，node 可測。
 // 所有隨機經由呼叫端傳入的 rand()（mulberry32），保持決定性可測。
 'use strict';
+(function () { // IIFE：避免傳統 script 頂層 const 撞名
 
 const PH = (typeof module !== 'undefined') ? require('./physics.js') : window.MWPhysics;
 const BK5 = (typeof module !== 'undefined') ? require('./blocks.js') : window.MWBlocks;
@@ -94,9 +95,9 @@ function stepMob(m, world, dt, player, rand, isNight, events) {
   let mvx = 0, mvz = 0;
 
   if (m.type === 'zombie' && dist < 24 && player.hp > 0) {
-    // 追擊
-    mvx = dx / (dist || 1); mvz = dz / (dist || 1);
-    m.yaw = Math.atan2(-mvx, -mvz);
+    // 追擊（貼身就停下，不鑽進玩家身體）
+    if (dist > 1.1) { mvx = dx / (dist || 1); mvz = dz / (dist || 1); }
+    m.yaw = Math.atan2(-(dx / (dist || 1)), -(dz / (dist || 1)));
     const dy = Math.abs((player.y) - m.y);
     if (dist < 1.5 && dy < 2 && m.attackCool <= 0) {
       m.attackCool = 1.1;
@@ -144,3 +145,4 @@ function hurtMob(m, dmg, kx, kz) {
 const MWEntities = { MOB_DEFS, makeDrop, stepDrop, makeMob, stepMob, hurtMob };
 if (typeof module !== 'undefined') module.exports = MWEntities;
 if (typeof window !== 'undefined') window.MWEntities = MWEntities;
+})();
