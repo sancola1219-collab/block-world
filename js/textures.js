@@ -140,6 +140,20 @@
       rect(33, cx, cy, 2 + (rand() * 2 | 0), 2, `rgb(${100 + (rand() * 70 | 0)},${95 + (rand() * 60 | 0)},${90 + (rand() * 55 | 0)})`);
     }
 
+    noiseTile(34, 244, 244, 244, 10);                    // 34 白羊毛
+    speckle(34, 20, 'rgba(210,210,210,0.5)');
+    noiseTile(35, 190, 48, 40, 14);                      // 35 TNT 側：紅底白帶
+    rect(35, 0, 6, 16, 4, '#e8e0d0');
+    ctx.fillStyle = '#1a1a1a';
+    { const [ox, oy] = tilePos(35);
+      ctx.fillRect(ox + 2, oy + 7, 2, 2); ctx.fillRect(ox + 7, oy + 7, 2, 2); ctx.fillRect(ox + 12, oy + 7, 2, 2); }
+    noiseTile(36, 190, 48, 40, 14);                      // 36 TNT 頂：中心引信
+    rect(36, 6, 6, 4, 4, '#e8e0d0'); rect(36, 7, 7, 2, 2, '#3a2a1a');
+    noiseTile(37, 196, 60, 56, 10);                      // 37 床頂：紅毯＋白枕
+    rect(37, 0, 0, 16, 5, '#eef0f4'); rect(37, 0, 5, 16, 1, '#a83030');
+    clearTile(38);                                       // 38 火把（十字）
+    rect(38, 7, 6, 2, 9, '#8a6a40'); rect(38, 7, 4, 2, 2, '#ffd24a'); rect(38, 7, 3, 2, 1, '#ff9030');
+
     // 40..47 裂痕八階（黑色細裂縫，其餘透明）
     for (let s = 0; s < 8; s++) {
       const t = 40 + s;
@@ -166,6 +180,64 @@
     rect(51, 3, 4, 3, 3, '#151515'); rect(51, 10, 4, 3, 3, '#151515'); rect(51, 5, 10, 6, 2, '#3a2020');
     noiseTile(52, 62, 118, 150, 16);                     // 52 殭屍衣
     noiseTile(53, 52, 62, 120, 14);                      // 53 殭屍褲
+    noiseTile(54, 240, 238, 232, 12);                    // 54 羊毛皮
+    speckle(54, 24, 'rgba(214,210,200,0.6)');
+    noiseTile(55, 238, 226, 218, 8);                     // 55 羊臉
+    rect(55, 4, 5, 8, 7, '#e8c8b8'); px(55, 5, 6, '#1a1a1a'); px(55, 10, 6, '#1a1a1a');
+    rect(55, 6, 10, 4, 2, '#c89888');
+    noiseTile(56, 108, 74, 50, 16);                      // 56 牛皮（棕＋白斑）
+    for (let i = 0; i < 4; i++) rect(56, (rand() * 11) | 0, (rand() * 11) | 0, 3 + (rand() * 3 | 0), 3, '#e8e2d8');
+    noiseTile(57, 108, 74, 50, 10);                      // 57 牛臉
+    rect(57, 4, 9, 8, 5, '#d8c8b8'); px(57, 5, 11, '#604030'); px(57, 10, 11, '#604030');
+    px(57, 4, 5, '#1a1a1a'); px(57, 11, 5, '#1a1a1a');
+    rect(57, 2, 2, 2, 3, '#c8c0b0'); rect(57, 12, 2, 2, 3, '#c8c0b0'); // 角
+    noiseTile(58, 88, 176, 72, 22);                      // 58 苦力怕皮
+    for (let i = 0; i < 6; i++) px(58, (rand() * 16) | 0, (rand() * 16) | 0, '#4a9440');
+    noiseTile(59, 88, 176, 72, 12);                      // 59 苦力怕臉（招牌哭臉）
+    rect(59, 3, 4, 3, 3, '#101010'); rect(59, 10, 4, 3, 3, '#101010');
+    rect(59, 6, 7, 4, 3, '#101010'); rect(59, 5, 9, 2, 4, '#101010'); rect(59, 9, 9, 2, 4, '#101010');
+
+    // 60.. 物品圖示（透明底）
+    clearTile(60); // 木棒
+    for (let i = 0; i < 9; i++) rect(60, 4 + i, 12 - i, 2, 2, i % 2 ? '#8a6a40' : '#7a5a34');
+    clearTile(61); // 煤炭
+    rect(61, 4, 5, 8, 7, '#252525'); rect(61, 6, 3, 5, 3, '#1c1c1c'); px(61, 6, 6, '#4a4a4a'); px(61, 9, 8, '#3a3a3a');
+    function ingot(t, c1, c2) {
+      clearTile(t);
+      rect(t, 3, 8, 10, 5, c1); rect(t, 5, 6, 10, 2, c1); rect(t, 4, 7, 10, 2, c2); px(t, 5, 9, c2);
+    }
+    ingot(62, '#d8d8dd', '#f4f4f8'); // 鐵錠
+    ingot(63, '#e8c93e', '#fdf0a0'); // 金錠
+    clearTile(64); // 鑽石
+    rect(64, 5, 4, 6, 2, '#9df2f2'); rect(64, 4, 6, 8, 2, '#4de0e0'); rect(64, 5, 8, 6, 2, '#3cc8cc');
+    rect(64, 6, 10, 4, 1, '#2ba8b0'); rect(64, 7, 11, 2, 1, '#2ba8b0');
+    clearTile(65); // 豬排
+    rect(65, 4, 4, 8, 9, '#e88890'); rect(65, 5, 5, 6, 7, '#d86870'); rect(65, 6, 11, 4, 3, '#f0e8dc');
+    clearTile(66); // 牛排
+    rect(66, 4, 4, 9, 9, '#a83828'); rect(66, 5, 5, 7, 7, '#8a2c20'); rect(66, 6, 7, 4, 2, '#c05848');
+    clearTile(67); // 蘋果
+    rect(67, 5, 6, 7, 7, '#d43a3a'); rect(67, 4, 7, 9, 4, '#d43a3a'); px(67, 6, 7, '#f08080');
+    rect(67, 8, 3, 1, 3, '#6a4a2a'); px(67, 9, 4, '#4e8834');
+    clearTile(68); // 火藥
+    for (let i = 0; i < 22; i++) px(68, 3 + ((rand() * 10) | 0), 6 + ((rand() * 7) | 0), rand() < 0.5 ? '#5a5a5a' : '#787878');
+
+    // 70..85 工具：柄＋各類頭；材質色 [木, 石, 鐵, 鑽]
+    const TIER = ['#8a6a40', '#909090', '#e0e0e6', '#4de0e0'];
+    const TIER2 = ['#6a4e2c', '#6e6e6e', '#b8b8c0', '#2ba8b0'];
+    function handle(t) { for (let i = 0; i < 8; i++) rect(t, 4 + i, 12 - i, 2, 2, i % 2 ? '#8a6a40' : '#7a5a34'); }
+    for (let k = 0; k < 4; k++) {
+      const pk = 70 + k, ax = 74 + k, sh = 78 + k, sw = 82 + k;
+      clearTile(pk); handle(pk); // 鎬：頂端橫弧
+      rect(pk, 3, 3, 10, 2, TIER[k]); rect(pk, 2, 4, 2, 3, TIER2[k]); rect(pk, 12, 4, 2, 3, TIER2[k]);
+      clearTile(ax); handle(ax); // 斧：側刃
+      rect(ax, 8, 2, 5, 5, TIER[k]); rect(ax, 6, 3, 3, 4, TIER[k]); rect(ax, 8, 6, 3, 2, TIER2[k]);
+      clearTile(sh); handle(sh); // 鏟：頂端鏟頭
+      rect(sh, 10, 2, 4, 5, TIER[k]); rect(sh, 11, 1, 2, 1, TIER2[k]);
+      clearTile(sw); // 劍：長刃＋短柄
+      for (let i = 0; i < 9; i++) rect(sw, 5 + i, 11 - i, 2, 2, i < 2 ? '#6a4e2c' : TIER[k]);
+      for (let i = 2; i < 9; i++) px(sw, 5 + i, 12 - i, TIER2[k]);
+      rect(sw, 4, 10, 4, 1, '#555');
+    }
 
     return cv;
   }

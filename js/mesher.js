@@ -84,7 +84,7 @@ function buildChunkMesh(world, cx, cz) {
         const d = def(id);
 
         if (d.cross) {
-          const sky = world.lightAt(wx, y, wz) / 15;
+          const sky = d.emissive ? 2.0 : world.lightAt(wx, y, wz) / 15;
           pushCross(cutout, wx, y, wz, tileOf(id, 'side'), sky);
           continue;
         }
@@ -94,7 +94,9 @@ function buildChunkMesh(world, cx, cz) {
         for (const f of FACES) {
           const nx = wx + f.n[0], ny = y + f.n[1], nz = wz + f.n[2];
           const nid = get(nx, ny, nz);
-          if (!faceVisible(id, nid)) continue;
+          // 半高方塊的頂面永遠可見（上方即使是實心塊也有縫）
+          const forceTop = d.h !== undefined && f.n[1] === 1;
+          if (!forceTop && !faceVisible(id, nid)) continue;
 
           const sky = d.emissive ? 2.0 : world.lightAt(nx, ny, nz) / 15;
           const tile = tileOf(id, f.face);
@@ -115,9 +117,11 @@ function buildChunkMesh(world, cx, cz) {
               ao.push(AO_FACTOR[aoLevel]);
             }
           }
-          // 水頂面下陷（上方沒有水時）
-          const sink = liquid && get(wx, y + 1, wz) !== id ? 0.86 : null;
-          pushFace(out, wx, y, wz, f, tile, sky, f.shade, ao, sink);
+          // 頂高：水面下陷 0.86；半高方塊用 def.h
+          let topH = null;
+          if (liquid) topH = get(wx, y + 1, wz) !== id ? 0.86 : null;
+          else if (d.h !== undefined) topH = d.h;
+          pushFace(out, wx, y, wz, f, tile, sky, f.shade, ao, topH);
         }
       }
     }

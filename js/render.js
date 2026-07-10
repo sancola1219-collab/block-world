@@ -47,17 +47,19 @@
   layout(location=1) in vec2 aUv;
   layout(location=2) in vec2 aL;
   uniform mat4 uPV; uniform vec3 uCam; uniform vec2 uUvOff;
-  out vec2 vUv; out vec2 vL; out float vDist;
+  out vec2 vUv; out vec2 vL; out float vDist; out vec3 vWorld;
   void main() {
     gl_Position = uPV * vec4(aPos, 1.0);
-    vUv = aUv + uUvOff; vL = aL; vDist = distance(aPos, uCam);
+    vUv = aUv + uUvOff; vL = aL; vDist = distance(aPos, uCam); vWorld = aPos;
   }`;
   const CHUNK_FS = `#version 300 es
   precision mediump float;
-  in vec2 vUv; in vec2 vL; in float vDist;
+  in vec2 vUv; in vec2 vL; in float vDist; in vec3 vWorld;
   uniform sampler2D uTex;
   uniform float uDay, uGlow, uAlpha, uCutout, uFogNear, uFogFar;
   uniform vec3 uFog;
+  uniform vec3 uLightPos[16];  // 火把/螢石點光源
+  uniform int uLightCount;
   out vec4 frag;
   void main() {
     vec4 t = texture(uTex, vUv);
@@ -68,7 +70,12 @@
       float sun = vL.x * (0.22 + 0.78 * uDay);
       float glow = clamp(1.0 - vDist / 9.0, 0.0, 1.0);
       glow = glow * glow * uGlow * clamp(1.0 - sun, 0.0, 1.0);
-      bright = clamp(0.07 + sun + glow, 0.0, 1.0);
+      float tl = 0.0;
+      for (int i = 0; i < 16; i++) {
+        if (i >= uLightCount) break;
+        tl += max(0.0, 1.0 - distance(vWorld, uLightPos[i]) / 7.0);
+      }
+      bright = clamp(0.07 + sun + glow + tl * 0.95, 0.0, 1.0);
     }
     vec3 c = t.rgb * bright * vL.y;
     float fog = smoothstep(uFogNear, uFogFar, vDist);
@@ -175,6 +182,33 @@
       { size: [0.18, 0.18, 0.66], at: [-0.35, 1.44, -0.3], tile: 50 },
       { size: [0.48, 0.48, 0.48], at: [0, 1.8, 0], tile: 50 },
       { size: [0.46, 0.46, 0.05], at: [0, 1.8, -0.25], tile: 51 },
+    ],
+    sheep: [
+      { size: [0.72, 0.66, 1.05], at: [0, 0.88, 0], tile: 54 },
+      { size: [0.4, 0.4, 0.4], at: [0, 1.12, -0.66], tile: 54 },
+      { size: [0.38, 0.38, 0.05], at: [0, 1.12, -0.88], tile: 55 },
+      { size: [0.18, 0.52, 0.18], pivot: [0.22, 0.55, 0.34], swing: 1, tile: 54 },
+      { size: [0.18, 0.52, 0.18], pivot: [-0.22, 0.55, 0.34], swing: -1, tile: 54 },
+      { size: [0.18, 0.52, 0.18], pivot: [0.22, 0.55, -0.34], swing: -1, tile: 54 },
+      { size: [0.18, 0.52, 0.18], pivot: [-0.22, 0.55, -0.34], swing: 1, tile: 54 },
+    ],
+    cow: [
+      { size: [0.78, 0.68, 1.1], at: [0, 0.98, 0], tile: 56 },
+      { size: [0.44, 0.44, 0.44], at: [0, 1.26, -0.72], tile: 56 },
+      { size: [0.42, 0.42, 0.05], at: [0, 1.26, -0.96], tile: 57 },
+      { size: [0.2, 0.64, 0.2], pivot: [0.25, 0.66, 0.36], swing: 1, tile: 56 },
+      { size: [0.2, 0.64, 0.2], pivot: [-0.25, 0.66, 0.36], swing: -1, tile: 56 },
+      { size: [0.2, 0.64, 0.2], pivot: [0.25, 0.66, -0.36], swing: -1, tile: 56 },
+      { size: [0.2, 0.64, 0.2], pivot: [-0.25, 0.66, -0.36], swing: 1, tile: 56 },
+    ],
+    creeper: [
+      { size: [0.2, 0.36, 0.2], pivot: [0.13, 0.36, 0.16], swing: 1, tile: 58 },
+      { size: [0.2, 0.36, 0.2], pivot: [-0.13, 0.36, 0.16], swing: -1, tile: 58 },
+      { size: [0.2, 0.36, 0.2], pivot: [0.13, 0.36, -0.16], swing: -1, tile: 58 },
+      { size: [0.2, 0.36, 0.2], pivot: [-0.13, 0.36, -0.16], swing: 1, tile: 58 },
+      { size: [0.44, 0.9, 0.26], at: [0, 0.82, 0], tile: 58 },
+      { size: [0.46, 0.46, 0.46], at: [0, 1.5, 0], tile: 58 },
+      { size: [0.44, 0.44, 0.05], at: [0, 1.5, -0.24], tile: 59 },
     ],
   };
 
@@ -390,6 +424,8 @@
       gl.uniform1f(U(progChunk, 'uFogNear'), sc.fogNear);
       gl.uniform1f(U(progChunk, 'uFogFar'), sc.fogFar);
       gl.uniform3fv(U(progChunk, 'uFog'), sc.fogColor);
+      gl.uniform1i(U(progChunk, 'uLightCount'), sc.lightCount || 0);
+      if (sc.lightCount) gl.uniform3fv(U(progChunk, 'uLightPos'), sc.lights);
 
       const fx = -Math.sin(sc.cam.yaw), fz = -Math.cos(sc.cam.yaw);
       const visible = [];
@@ -442,8 +478,10 @@
         gl.uniform1f(U(progEnt, 'uLight'), Math.min(1, light));
         const hurt = mob.hurtT > 0 ? 0.55 : 0;
         const burn = mob.burning ? 0.35 : 0;
-        gl.uniform3f(U(progEnt, 'uTint'), 1, burn > 0 ? 0.45 : 0.15, 0.1);
-        gl.uniform1f(U(progEnt, 'uTintAmt'), Math.max(hurt, burn));
+        const fuse = mob.fuse > 0 ? 0.35 + 0.35 * Math.sin(mob.fuse * 22) : 0;
+        if (fuse > 0) gl.uniform3f(U(progEnt, 'uTint'), 1, 1, 1);
+        else gl.uniform3f(U(progEnt, 'uTint'), 1, burn > 0 ? 0.45 : 0.15, 0.1);
+        gl.uniform1f(U(progEnt, 'uTintAmt'), Math.max(hurt, burn, fuse));
         const swing = Math.sin(mob.anim * 4) * 0.7;
         for (const part of MODELS[mob.type]) {
           let pm;
@@ -465,15 +503,17 @@
         }
       }
 
-      // 掉落物
-      gl.uniform1f(U(progEnt, 'uTintAmt'), 0);
+      // 掉落物（含引爆中的 TNT：flash 閃白、原尺寸）
       for (const d of sc.drops) {
-        const bob = Math.sin(d.spin * 1.7) * 0.05;
+        const bob = d.flash !== undefined ? 0 : Math.sin(d.spin * 1.7) * 0.05;
+        const s = d.scale || 0.24;
         const m = compose(
-          translate(d.x, d.y + 0.12 + bob, d.z),
-          rotY(d.spin),
-          scale(0.24, 0.24, 0.24));
+          translate(d.x, d.y + (d.flash !== undefined ? s / 2 : 0.12) + bob, d.z),
+          rotY(d.flash !== undefined ? 0 : d.spin),
+          scale(s, s, s));
         gl.uniformMatrix4fv(U(progEnt, 'uModel'), false, m);
+        gl.uniform3f(U(progEnt, 'uTint'), 1, 1, 1);
+        gl.uniform1f(U(progEnt, 'uTintAmt'), d.flash || 0);
         gl.uniform1f(U(progEnt, 'uLight'), Math.min(1, 0.3 + 0.7 * d.light * (0.22 + 0.78 * sc.day)));
         const [u, v] = tileUV(d.tile);
         gl.uniform2f(U(progEnt, 'uTileOff'), u, v);

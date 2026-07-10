@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>我的方塊世界</title>
-<link rel="stylesheet" href="./css/style.css?v=2">
+<link rel="stylesheet" href="./css/style.css?v=3">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -21,6 +21,7 @@
 
 <div id="overlay-water"></div>
 <div id="overlay-hurt"></div>
+<div id="overlay-sleep"></div>
 
 <div id="touch-ui" style="display:none">
   <div id="look-zone"></div>
@@ -88,7 +89,12 @@
       E 物品欄與合成．F 飛行（創造模式）．Esc 暫停<br><br>
       <b>手機</b><br>
       左搖桿移動（推滿奔跑）．右半畫面滑動轉視角<br>
-      輕點畫面挖一下．「挖」「放」按鈕長按連續操作
+      輕點畫面挖一下．「挖」「放」按鈕長按連續操作<br><br>
+      <b>小知識</b><br>
+      對的工具挖得快（鎬挖石、斧砍木、鏟挖土）<br>
+      拿食物按右鍵可以吃．火把能照亮洞穴<br>
+      點一下 TNT 會點燃．晚上對床按右鍵可以睡到天亮<br>
+      小心綠色的苦力怕——牠靠近會爆炸！
     </p>
     <div class="menu-col"><button id="btn-help-back">返回</button></div>
   </div>
@@ -134,22 +140,22 @@
   </div>
 </div>
 
-<div id="buildtag">block-world v1.0.2</div>
+<div id="buildtag">block-world v1.1.0</div>
 
-<script src="./js/noise.js?v=2"></script>
-<script src="./js/blocks.js?v=2"></script>
-<script src="./js/worldgen.js?v=2"></script>
-<script src="./js/world.js?v=2"></script>
-<script src="./js/mesher.js?v=2"></script>
-<script src="./js/physics.js?v=2"></script>
-<script src="./js/entities.js?v=2"></script>
-<script src="./js/inventory.js?v=2"></script>
-<script src="./js/save.js?v=2"></script>
-<script src="./js/textures.js?v=2"></script>
-<script src="./js/render.js?v=2"></script>
-<script src="./js/audio.js?v=2"></script>
-<script src="./js/input.js?v=2"></script>
-<script src="./js/main.js?v=2"></script>
+<script src="./js/noise.js?v=3"></script>
+<script src="./js/blocks.js?v=3"></script>
+<script src="./js/worldgen.js?v=3"></script>
+<script src="./js/world.js?v=3"></script>
+<script src="./js/mesher.js?v=3"></script>
+<script src="./js/physics.js?v=3"></script>
+<script src="./js/entities.js?v=3"></script>
+<script src="./js/inventory.js?v=3"></script>
+<script src="./js/save.js?v=3"></script>
+<script src="./js/textures.js?v=3"></script>
+<script src="./js/render.js?v=3"></script>
+<script src="./js/audio.js?v=3"></script>
+<script src="./js/input.js?v=3"></script>
+<script src="./js/main.js?v=3"></script>
 <script>
 // 載入看門狗：任一支腳本掛掉時把訊息顯示在載入畫面
 (function () {

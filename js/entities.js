@@ -48,8 +48,11 @@ function stepDrop(d, world, dt, player) {
 
 // ---- 生物 ----
 const MOB_DEFS = {
-  pig: { hp: 10, hw: 0.35, hh: 0.9, speed: 1.4, name: '豬' },
-  zombie: { hp: 20, hw: 0.3, hh: 1.85, speed: 2.3, name: '殭屍' },
+  pig: { hp: 8, hw: 0.35, hh: 0.9, speed: 1.4, name: '豬' },
+  sheep: { hp: 8, hw: 0.4, hh: 1.15, speed: 1.2, name: '羊' },
+  cow: { hp: 10, hw: 0.45, hh: 1.3, speed: 1.1, name: '牛' },
+  zombie: { hp: 16, hw: 0.3, hh: 1.85, speed: 2.3, name: '殭屍' },
+  creeper: { hp: 12, hw: 0.3, hh: 1.6, speed: 1.9, name: '苦力怕' },
 };
 
 function makeMob(type, x, y, z) {
@@ -63,6 +66,7 @@ function makeMob(type, x, y, z) {
     attackCool: 0, hurtT: 0,
     onGround: false, anim: 0,
     dead: false, deathT: 0, burning: false,
+    fuse: 0, exploded: false,
     age: 0,
   };
 }
@@ -102,6 +106,20 @@ function stepMob(m, world, dt, player, rand, isNight, events) {
     if (dist < 1.5 && dy < 2 && m.attackCool <= 0) {
       m.attackCool = 1.1;
       events.push({ type: 'attack', dmg: 2, x: m.x, z: m.z });
+    }
+  } else if (m.type === 'creeper' && dist < 9 && player.hp > 0) {
+    // 逼近；貼近時點燃引信，跑遠就熄
+    m.yaw = Math.atan2(-(dx / (dist || 1)), -(dz / (dist || 1)));
+    if (dist < 2.6) {
+      if (m.fuse === 0) events.push({ type: 'hiss', x: m.x, z: m.z });
+      m.fuse += dt;
+      if (m.fuse >= 1.5 && !m.exploded) {
+        m.exploded = true; m.dead = true;
+        events.push({ type: 'explode', x: m.x, y: m.y + 0.8, z: m.z, r: 2.4, dmg: 14 });
+      }
+    } else {
+      m.fuse = Math.max(0, m.fuse - dt * 2);
+      mvx = dx / (dist || 1); mvz = dz / (dist || 1);
     }
   } else {
     // 漫遊

@@ -71,16 +71,43 @@ function swapSlots(inv, a, b) {
 }
 
 // ---- 合成 ----
+// 工具材料階：頭×N＋木棒；鎬/斧 3 頭 2 棒、鏟 1 頭 2 棒、劍 2 頭 1 棒
+const TIER_MAT = [
+  { head: B.PLANK, picks: [B.WOOD_PICK, B.WOOD_AXE, B.WOOD_SHOVEL, B.WOOD_SWORD] },
+  { head: B.COBBLE, picks: [B.STONE_PICK, B.STONE_AXE, B.STONE_SHOVEL, B.STONE_SWORD] },
+  { head: B.IRON_INGOT, picks: [B.IRON_PICK, B.IRON_AXE, B.IRON_SHOVEL, B.IRON_SWORD] },
+  { head: B.DIAMOND, picks: [B.DIAMOND_PICK, B.DIAMOND_AXE, B.DIAMOND_SHOVEL, B.DIAMOND_SWORD] },
+];
+const TOOL_RECIPES = [];
+for (const t of TIER_MAT) {
+  const defs = BK6;
+  const heads = [3, 3, 1, 2], sticks = [2, 2, 2, 1];
+  for (let i = 0; i < 4; i++) {
+    TOOL_RECIPES.push({
+      name: defs.def(t.picks[i]).name,
+      out: t.picks[i], outCount: 1,
+      ins: [{ id: t.head, count: heads[i] }, { id: B.STICK, count: sticks[i] }],
+    });
+  }
+}
+
 const RECIPES = [
   { name: '木板 ×4', out: B.PLANK, outCount: 4, ins: [{ id: B.LOG, count: 1 }] },
+  { name: '木棒 ×4', out: B.STICK, outCount: 4, ins: [{ id: B.PLANK, count: 2 }] },
+  { name: '火把 ×4', out: B.TORCH, outCount: 4, ins: [{ id: B.COAL, count: 1 }, { id: B.STICK, count: 1 }] },
+  ...TOOL_RECIPES,
+  { name: '床', out: B.BED, outCount: 1, ins: [{ id: B.WOOL_WHITE, count: 3 }, { id: B.PLANK, count: 3 }] },
+  { name: 'TNT', out: B.TNT, outCount: 1, ins: [{ id: B.GUNPOWDER, count: 3 }, { id: B.SAND, count: 3 }] },
   { name: '石磚 ×1', out: B.STONEBRICK, outCount: 1, ins: [{ id: B.COBBLE, count: 1 }] },
   { name: '石頭 ×1', out: B.STONE, outCount: 1, ins: [{ id: B.COBBLE, count: 2 }] },
+  { name: '石半磚 ×2', out: B.SLAB_STONE, outCount: 2, ins: [{ id: B.STONE, count: 1 }] },
+  { name: '木半磚 ×2', out: B.SLAB_PLANK, outCount: 2, ins: [{ id: B.PLANK, count: 1 }] },
   { name: '玻璃 ×1', out: B.GLASS, outCount: 1, ins: [{ id: B.SAND, count: 2 }] },
   { name: '磚塊 ×2', out: B.BRICK, outCount: 2, ins: [{ id: B.DIRT, count: 2 }, { id: B.SAND, count: 2 }] },
-  { name: '螢石 ×2', out: B.GLOWSTONE, outCount: 2, ins: [{ id: B.COAL_ORE, count: 1 }, { id: B.GOLD_ORE, count: 1 }] },
-  { name: '紅羊毛 ×2', out: B.WOOL_RED, outCount: 2, ins: [{ id: B.PLANK, count: 2 }, { id: B.FLOWER_RED, count: 1 }] },
-  { name: '黃羊毛 ×2', out: B.WOOL_YELLOW, outCount: 2, ins: [{ id: B.PLANK, count: 2 }, { id: B.FLOWER_YELLOW, count: 1 }] },
-  { name: '藍羊毛 ×2', out: B.WOOL_BLUE, outCount: 2, ins: [{ id: B.PLANK, count: 2 }, { id: B.DIAMOND_ORE, count: 1 }] },
+  { name: '螢石 ×2', out: B.GLOWSTONE, outCount: 2, ins: [{ id: B.COAL, count: 1 }, { id: B.GOLD_INGOT, count: 1 }] },
+  { name: '紅羊毛', out: B.WOOL_RED, outCount: 1, ins: [{ id: B.WOOL_WHITE, count: 1 }, { id: B.FLOWER_RED, count: 1 }] },
+  { name: '黃羊毛', out: B.WOOL_YELLOW, outCount: 1, ins: [{ id: B.WOOL_WHITE, count: 1 }, { id: B.FLOWER_YELLOW, count: 1 }] },
+  { name: '藍羊毛', out: B.WOOL_BLUE, outCount: 1, ins: [{ id: B.WOOL_WHITE, count: 1 }, { id: B.DIAMOND, count: 1 }] },
 ];
 
 function canCraft(inv, r) {

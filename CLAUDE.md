@@ -25,9 +25,13 @@
 
 ## 常數速查
 
-- 方塊 id 與貼圖 tile 對照在 `blocks.js`；裂痕 tile 40–47、生物皮膚 48+；圖集 16×16 格、每格 16px。
-- 網格頂點格式 stride 7：`x,y,z,u,v,sky,shade`；`sky=2.0` 表示自發光（螢石）。
-- 存檔 key `mineworld.save.v1`（localStorage）：種子＋方塊差異＋玩家＋物品欄。
+- id < 100 = 方塊（可放置）、id ≥ 100 = 物品（工具/食物/材料）；對照都在 `blocks.js`。
+- 貼圖 tile：裂痕 40–47、生物皮膚 48–59、物品圖示 60–68、工具 70–85；圖集 16×16 格、每格 16px。
+- 網格頂點格式 stride 7：`x,y,z,u,v,sky,shade`；`sky=2.0` 表示自發光（螢石/火把）。
+- 半高方塊用 `def.h`（半磚 0.5、床 0.55）：mesher 頂面用 h、物理 overlaps 用 h、isOpaque 回 false。
+- 火把/螢石＝shader 點光源（上限 16 盞取最近）：main 的 `G.lights` 註冊表，讀檔時 `rebuildLights()` 從 edits 重建——新增光源方塊記得掛進 `noteLightChange`。
+- 爆炸（TNT/苦力怕）走 main 的 `explode()`：炸方塊＋連鎖 TNT＋玩家/生物傷害；引信是 `G.fuses` 實體。
+- 存檔 key `mineworld.save.v1`（localStorage）：種子＋方塊差異＋玩家＋物品欄；設定 `mineworld.settings.v1`。
 
 ## 測試與驗證
 

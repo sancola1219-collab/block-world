@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  const { B, def, isSolid, isLiquid, dropOf, tileOf, CREATIVE_LIST } = MWBlocks;
+  const { B, def, isSolid, isLiquid, isItem, dropOf, tileOf, digTime, attackDmg, CREATIVE_LIST } = MWBlocks;
   const WG = MWWorldgen;
   const { CHUNK, WORLD_H, SEA } = WG;
   const PH = MWPhysics;
@@ -42,7 +42,8 @@
     world: null, mode: 'creative', seed: 0,
     player: null, inv: null,
     time: 0.30, playedT: 0,
-    drops: [], mobs: [],
+    drops: [], mobs: [], fuses: [], lights: new Map(),
+    sleeping: 0,
     spawn: { x: 0.5, y: 50, z: 0.5 },
     digTarget: null, digProgress: 0, digCool: 0, placeCool: 0,
     meshed: new Set(), unloadT: 0, autosaveT: 0,
@@ -75,10 +76,11 @@
     G.player = PH.createPlayer(G.spawn.x, G.spawn.y, G.spawn.z);
     G.inv = INV.createInventory();
     G.time = 0.30;
-    G.drops = []; G.mobs = [];
+    G.drops = []; G.mobs = []; G.fuses = []; G.sleeping = 0;
     G.meshed.clear();
     G.playedT = 0;
     G.freshSpawn = true;
+    rebuildLights();
     if (mode === 'creative') {
       const starter = [B.GRASS, B.DIRT, B.STONE, B.PLANK, B.LOG, B.GLASS, B.BRICK, B.GLOWSTONE, B.WOOL_RED];
       starter.forEach((id, i) => { G.inv.slots[i] = { id, count: 1 }; });
@@ -99,10 +101,11 @@
     G.player.fly = !!o.player.fly;
     G.inv = INV.deserializeInv(o.inv);
     G.time = o.time || 0.3;
-    G.drops = []; G.mobs = [];
+    G.drops = []; G.mobs = []; G.fuses = []; G.sleeping = 0;
     G.meshed.clear();
     G.playedT = 0;
     G.freshSpawn = false;
+    rebuildLights();
     MWInput.state.yaw = G.player.yaw;
     MWInput.state.pitch = G.player.pitch;
   }
@@ -170,6 +173,78 @@
       renderer.deleteChunkMesh(key);
       G.meshed.delete(key);
     }
+  }
+
+  // ---------- 光源註冊（火把/螢石 → shader 點光源） ----------
+  function lightKey(x, y, z) { return x + ',' + y + ',' + z; }
+  function rebuildLights() {
+    G.lights = new Map();
+    if (!G.world) return;
+    for (const [key, ed] of G.world.edits) {
+      const [cx, cz] = key.split(',').map(Number);
+      for (const [i, id] of ed) {
+        if (id === B.TORCH || id === B.GLOWSTONE) {
+          const y = i % WORLD_H, col = (i - y) / WORLD_H;
+          const lx = col >> 4, lz = col & 15;
+          const wx = cx * CHUNK + lx, wz = cz * CHUNK + lz;
+          G.lights.set(lightKey(wx, y, wz), [wx + 0.5, y + 0.6, wz + 0.5]);
+        }
+      }
+    }
+  }
+  function noteLightChange(x, y, z, newId, oldId) {
+    if (oldId === B.TORCH || oldId === B.GLOWSTONE) G.lights.delete(lightKey(x, y, z));
+    if (newId === B.TORCH || newId === B.GLOWSTONE) G.lights.set(lightKey(x, y, z), [x + 0.5, y + 0.6, z + 0.5]);
+  }
+
+  // ---------- TNT 與爆炸 ----------
+  function igniteTNT(x, y, z, fuseT, silent) {
+    G.world.setBlock(x, y, z, B.AIR);
+    G.fuses.push({ x: x + 0.5, y, z: z + 0.5, t: fuseT });
+    if (!silent) { SFX.hiss(); showHint('TNT 點燃了，快跑！', 1500); }
+  }
+
+  function explode(x, y, z, r, dmg) {
+    SFX.explosion();
+    const R = Math.ceil(r);
+    for (let dx = -R; dx <= R; dx++) for (let dy = -R; dy <= R; dy++) for (let dz = -R; dz <= R; dz++) {
+      if (dx * dx + dy * dy + dz * dz > r * r) continue;
+      const wx = Math.floor(x) + dx, wy = Math.floor(y) + dy, wz = Math.floor(z) + dz;
+      const id = G.world.getBlock(wx, wy, wz);
+      if (id === B.AIR || id === B.BEDROCK || id === B.WATER) continue;
+      if (id === B.TNT) { igniteTNT(wx, wy, wz, 0.3 + G.rand() * 0.5, true); continue; } // 連鎖
+      if (G.mode === 'survival' && G.rand() < 0.25) {
+        const drop = dropOf(id);
+        if (drop !== B.AIR) G.drops.push(EN.makeDrop(wx + 0.5, wy + 0.5, wz + 0.5, drop, G.rand));
+      }
+      noteLightChange(wx, wy, wz, B.AIR, id);
+      G.world.setBlock(wx, wy, wz, B.AIR);
+    }
+    const p = G.player;
+    const pd = Math.hypot(p.x - x, p.y + 0.9 - y, p.z - z);
+    if (pd < r * 2.2) damagePlayer(Math.max(1, Math.round(dmg * (1 - pd / (r * 2.2)))), { x, z });
+    for (const m of G.mobs) {
+      const md = Math.hypot(m.x - x, m.y + 0.5 - y, m.z - z);
+      if (md < r * 2.2) EN.hurtMob(m, Math.round(dmg * (1 - md / (r * 2.2))), m.x - x, m.z - z);
+    }
+  }
+
+  // ---------- 吃東西與睡覺 ----------
+  function tryEat(held) {
+    if (G.mode !== 'survival') return;
+    const p = G.player;
+    if (p.hp >= p.maxHp) { showHint('肚子不餓（血量已滿）', 1500); return; }
+    p.hp = Math.min(p.maxHp, p.hp + def(held.id).food);
+    INV.consumeSlot(G.inv, G.inv.sel);
+    SFX.eat();
+    refreshHotbar();
+  }
+
+  function trySleep() {
+    if (G.sleeping > 0) return;
+    if (!skyState().isNight) { showHint('現在還不睏，晚上才能睡覺', 2000); return; }
+    G.sleeping = 0.0001;
+    SFX.sleep();
   }
 
   // ---------- 天色 ----------
@@ -242,21 +317,29 @@
     const dir = PH.lookDir(p.yaw, p.pitch);
     const ray = PH.raycast(w, eye[0], eye[1], eye[2], dir[0], dir[1], dir[2], 5.5);
 
-    // 攻擊生物（點擊瞬間優先於挖掘）
+    const held = G.inv.slots[G.inv.sel];
+
+    // 攻擊生物（點擊瞬間優先於挖掘；劍傷害較高）
     if (inp.transient.leftClick) {
       const mob = pickMob(eye, dir);
       if (mob) {
-        EN.hurtMob(mob, 4, mob.x - p.x, mob.z - p.z);
+        EN.hurtMob(mob, attackDmg(held ? held.id : undefined), mob.x - p.x, mob.z - p.z);
         SFX.attackHit();
         if (mob.type === 'pig') SFX.pig();
+        if (mob.type === 'sheep') SFX.sheep();
+        if (mob.type === 'cow') SFX.cow();
+        inp.transient.leftClick = false;
+      } else if (ray.hit && ray.id === B.TNT) {
+        // 點一下 TNT ＝ 點燃
+        igniteTNT(ray.x, ray.y, ray.z, 2);
         inp.transient.leftClick = false;
       }
     }
 
-    // 挖掘
-    if (inp.mouseDown[0] && ray.hit) {
-      const hard = def(ray.id).hardness;
-      if (hard >= 0) {
+    // 挖掘（TNT 不能挖，只能點燃）
+    if (inp.mouseDown[0] && ray.hit && ray.id !== B.TNT) {
+      const time = digTime(ray.id, held ? held.id : undefined);
+      if (time >= 0) {
         if (G.mode === 'creative') {
           if (G.digCool <= 0) {
             breakBlock(ray.x, ray.y, ray.z, ray.id, false);
@@ -265,7 +348,7 @@
         } else {
           const sameTarget = G.digTarget && G.digTarget.x === ray.x && G.digTarget.y === ray.y && G.digTarget.z === ray.z;
           if (!sameTarget) { G.digTarget = { x: ray.x, y: ray.y, z: ray.z }; G.digProgress = 0; }
-          G.digProgress += dt / Math.max(0.15, hard);
+          G.digProgress += dt / time;
           if ((G.playedT % 0.28) < dt) SFX.dig(soundKind(ray.id));
           if (G.digProgress >= 1) {
             breakBlock(ray.x, ray.y, ray.z, ray.id, true);
@@ -275,11 +358,30 @@
       }
     } else { G.digTarget = null; G.digProgress = 0; }
 
-    // 放置
+    // 放置 / 睡覺 / 吃東西
     const wantPlace = inp.transient.rightClick || (inp.mouseDown[2] && G.placeCool <= 0);
-    if (wantPlace && ray.hit) {
-      placeBlock(ray);
+    if (wantPlace) {
+      if (ray.hit && ray.id === B.BED) trySleep();
+      else if (held && def(held.id).food) tryEat(held);
+      else if (ray.hit && held && !isItem(held.id)) placeBlock(ray);
       G.placeCool = 0.25;
+    }
+
+    // TNT 引信
+    for (const f of G.fuses) f.t -= dt;
+    const boom = G.fuses.filter(f => f.t <= 0);
+    G.fuses = G.fuses.filter(f => f.t > 0);
+    for (const f of boom) explode(f.x, f.y + 0.5, f.z, 2.6, 16);
+
+    // 睡覺流程（黑幕 → 調到清晨）
+    if (G.sleeping > 0) {
+      G.sleeping += dt;
+      if (G.sleeping >= 0.9 && G.sleeping < 0.9 + dt) {
+        G.time = 0.02;
+        p.hp = Math.min(p.maxHp, p.hp + 4);
+        showHint('天亮了！');
+      }
+      if (G.sleeping > 1.8) G.sleeping = 0;
     }
     // 滴管（中鍵）
     if (inp.transient.midClick && ray.hit) {
@@ -306,15 +408,27 @@
     // 生物
     const sky = skyState();
     const events = [];
+    const AMBIENT = { pig: SFX.pig, sheep: SFX.sheep, cow: SFX.cow, zombie: SFX.zombie };
     for (const m of G.mobs) {
       EN.stepMob(m, w, dt, p, G.rand, sky.isNight, events);
       const dist = Math.hypot(m.x - p.x, m.z - p.z);
       if (dist > 70) m.dead = true;
-      if (dist < 14 && G.rand() < dt * 0.08) (m.type === 'pig' ? SFX.pig : SFX.zombie)();
+      if (dist < 14 && G.rand() < dt * 0.08 && AMBIENT[m.type]) AMBIENT[m.type]();
     }
+    const MOB_DROPS = {
+      pig: [B.PORKCHOP, 1, 2], sheep: [B.WOOL_WHITE, 1, 2],
+      cow: [B.BEEF, 1, 2], creeper: [B.GUNPOWDER, 2, 2], zombie: null,
+    };
     for (const e of events) {
-      if (e.type === 'attack' && G.mode === 'survival') {
-        damagePlayer(e.dmg, e);
+      if (e.type === 'attack' && G.mode === 'survival') damagePlayer(e.dmg, e);
+      else if (e.type === 'explode') explode(e.x, e.y, e.z, e.r, e.dmg);
+      else if (e.type === 'hiss') SFX.hiss();
+      else if (e.type === 'mobdie' && G.mode === 'survival') {
+        const d = MOB_DROPS[e.mob.type];
+        if (d) {
+          const n = d[1] + ((G.rand() * (d[2] - d[1] + 1)) | 0);
+          for (let i = 0; i < n; i++) G.drops.push(EN.makeDrop(e.mob.x, e.mob.y + 0.5, e.mob.z, d[0], G.rand));
+        }
       }
     }
     G.mobs = G.mobs.filter(m => !m.dead);
@@ -377,14 +491,23 @@
 
   function breakBlock(x, y, z, id, withDrop) {
     G.world.setBlock(x, y, z, B.AIR);
+    noteLightChange(x, y, z, B.AIR, id);
     SFX.breakBlock(soundKind(id));
     if (withDrop) {
       const drop = dropOf(id);
       if (drop !== B.AIR) G.drops.push(EN.makeDrop(x + 0.5, y + 0.3, z + 0.5, drop, G.rand));
+      // 打樹葉有機率掉蘋果
+      if ((id === B.LEAF || id === B.SPRUCE_LEAF) && G.rand() < 0.08) {
+        G.drops.push(EN.makeDrop(x + 0.5, y + 0.3, z + 0.5, B.APPLE, G.rand));
+      }
     }
-    // 頂上的花草跟著掉
+    // 頂上的花草/火把跟著掉
     const above = G.world.getBlock(x, y + 1, z);
-    if (def(above).cross) G.world.setBlock(x, y + 1, z, B.AIR);
+    if (def(above).cross) {
+      G.world.setBlock(x, y + 1, z, B.AIR);
+      noteLightChange(x, y + 1, z, B.AIR, above);
+      if (withDrop && dropOf(above) !== B.AIR) G.drops.push(EN.makeDrop(x + 0.5, y + 1.3, z + 0.5, dropOf(above), G.rand));
+    }
   }
 
   function placeBlock(ray) {
@@ -398,32 +521,41 @@
     if (def(id).solid && PH.boxIntersectsBlock(G.player, tx, ty, tz)) return;
     for (const m of G.mobs) if (def(id).solid && PH.boxIntersectsBlock(m, tx, ty, tz)) return;
     if (ty < 1 || ty >= WORLD_H) return;
+    if (id === B.TORCH && !isSolid(G.world.getBlock(tx, ty - 1, tz))) {
+      showHint('火把要放在方塊上面', 1500);
+      return;
+    }
     if (G.mode === 'survival') INV.consumeSlot(G.inv, G.inv.sel);
     G.world.setBlock(tx, ty, tz, id);
+    noteLightChange(tx, ty, tz, id, cur);
     SFX.place();
     refreshHotbar();
   }
 
   function spawnMobs(sky) {
     const p = G.player, w = G.world;
-    const pigs = G.mobs.filter(m => m.type === 'pig').length;
-    const zombies = G.mobs.filter(m => m.type === 'zombie').length;
+    const count = (t) => G.mobs.filter(m => m.type === t).length;
+    const passive = count('pig') + count('sheep') + count('cow');
 
-    if (!sky.isNight && pigs < 5 && G.rand() < 0.008) {
+    if (!sky.isNight && passive < 8 && G.rand() < 0.010) {
       const a = G.rand() * Math.PI * 2, r = 16 + G.rand() * 18;
       const x = Math.floor(p.x + Math.cos(a) * r), z = Math.floor(p.z + Math.sin(a) * r);
       const top = w.topAt(x, z);
       const ground = w.getBlock(x, top, z);
       if ((ground === B.GRASS || ground === B.SNOW_GRASS) && top > SEA) {
-        G.mobs.push(EN.makeMob('pig', x + 0.5, top + 1.1, z + 0.5));
+        const type = ['pig', 'sheep', 'cow'][(G.rand() * 3) | 0];
+        G.mobs.push(EN.makeMob(type, x + 0.5, top + 1.1, z + 0.5));
       }
     }
-    if (sky.isNight && zombies < 7 && G.rand() < 0.02) {
-      const a = G.rand() * Math.PI * 2, r = 20 + G.rand() * 16;
-      const x = Math.floor(p.x + Math.cos(a) * r), z = Math.floor(p.z + Math.sin(a) * r);
-      const top = w.topAt(x, z);
-      if (top > SEA && top < WORLD_H - 4 && !isLiquid(w.getBlock(x, top + 1, z))) {
-        G.mobs.push(EN.makeMob('zombie', x + 0.5, top + 1.1, z + 0.5));
+    if (sky.isNight && G.rand() < 0.02) {
+      const type = G.rand() < 0.3 ? 'creeper' : 'zombie';
+      if ((type === 'creeper' && count('creeper') < 3) || (type === 'zombie' && count('zombie') < 6)) {
+        const a = G.rand() * Math.PI * 2, r = 20 + G.rand() * 16;
+        const x = Math.floor(p.x + Math.cos(a) * r), z = Math.floor(p.z + Math.sin(a) * r);
+        const top = w.topAt(x, z);
+        if (top > SEA && top < WORLD_H - 4 && !isLiquid(w.getBlock(x, top + 1, z))) {
+          G.mobs.push(EN.makeMob(type, x + 0.5, top + 1.1, z + 0.5));
+        }
       }
     }
   }
@@ -440,7 +572,33 @@
     const fogNear = underwater ? 4 : 62;
     const fogColor = underwater ? [0.05, 0.18, 0.38] : sky.hor;
 
-    const sl = (x, y, z) => G.world.lightAt(Math.floor(x), Math.floor(y), Math.floor(z)) / 15;
+    // 火把/螢石點光源：取離玩家最近 16 盞
+    const near = [];
+    for (const v of G.lights.values()) {
+      const d = (v[0] - p.x) * (v[0] - p.x) + (v[2] - p.z) * (v[2] - p.z);
+      if (d < 3600) near.push([d, v]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    const lc = Math.min(16, near.length);
+    const lights = new Float32Array(48);
+    for (let i = 0; i < lc; i++) {
+      lights[i * 3] = near[i][1][0]; lights[i * 3 + 1] = near[i][1][1]; lights[i * 3 + 2] = near[i][1][2];
+    }
+    const torchAt = (x, y, z) => {
+      let t = 0;
+      for (let i = 0; i < lc; i++) {
+        const d = Math.hypot(near[i][1][0] - x, near[i][1][1] - y, near[i][1][2] - z);
+        t = Math.max(t, 1 - d / 7);
+      }
+      return t;
+    };
+    const sl = (x, y, z) => Math.min(1, G.world.lightAt(Math.floor(x), Math.floor(y), Math.floor(z)) / 15 + torchAt(x, y, z));
+
+    // 掉落物＋引爆中的 TNT
+    const dropScene = G.drops.map(d => ({ x: d.x, y: d.y, z: d.z, spin: d.spin, tile: tileOf(d.blockId, 'side'), light: sl(d.x, d.y + 0.5, d.z) }));
+    for (const f of G.fuses) {
+      dropScene.push({ x: f.x, y: f.y, z: f.z, spin: 0, tile: 35, light: 1, flash: 0.35 + 0.35 * Math.sin(f.t * 22), scale: 0.98 });
+    }
 
     renderer.render({
       cam: { x: p.x, y: p.y + p.eye, z: p.z, yaw: p.yaw, pitch: p.pitch },
@@ -458,10 +616,11 @@
       ],
       sel: (G.state === 'playing' || G.state === 'inv') && currentSel() || null,
       crack: G.digTarget ? { ...G.digTarget, stage: Math.floor(G.digProgress * 8) } : null,
-      drops: G.drops.map(d => ({ x: d.x, y: d.y, z: d.z, spin: d.spin, tile: tileOf(d.blockId, 'side'), light: sl(d.x, d.y + 0.5, d.z) })),
+      lights, lightCount: lc,
+      drops: dropScene,
       mobs: G.mobs.map(m => ({
         type: m.type, x: m.x, y: m.y, z: m.z, yaw: m.yaw, anim: m.anim,
-        hurtT: m.hurtT, burning: m.burning, deathT: m.deathT,
+        hurtT: m.hurtT, burning: m.burning, deathT: m.deathT, fuse: m.fuse,
         light: sl(m.x, m.y + 1, m.z),
       })),
     });
@@ -499,13 +658,14 @@
     $('daynight').textContent = `${sky.isNight ? '🌙' : '☀️'} ${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor(hour % 1 * 60)).padStart(2, '0')}`;
     G.hurtFlash > 0 ? $('overlay-hurt').style.opacity = 1 : $('overlay-hurt').style.opacity = 0;
     $('overlay-water').style.opacity = p.headInWater ? 1 : 0;
+    $('overlay-sleep').style.opacity = (G.sleeping > 0 && G.sleeping < 1.2) ? 1 : 0;
   }
 
   // 2D 方塊圖示（假等角投影）
   function drawIcon(ctx, id, dx, dy, s) {
     const d = def(id);
     const src = (t) => [(t % 16) * 16, Math.floor(t / 16) * 16];
-    if (d.cross || d.liquid) {
+    if (d.cross || d.liquid || d.item) {
       const [sx, sy] = src(tileOf(id, 'side'));
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(atlasCv, sx, sy, 16, 16, dx + s * 0.08, dy + s * 0.08, s * 0.84, s * 0.84);

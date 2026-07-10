@@ -4,7 +4,7 @@
 (function () { // IIFE：避免傳統 script 頂層 const 撞名
 
 const BK4 = (typeof module !== 'undefined') ? require('./blocks.js') : window.MWBlocks;
-const { isSolid, isLiquid } = BK4;
+const { isSolid, isLiquid, def } = BK4;
 
 const GRAVITY = 24;
 const JUMP_V = 8.4;
@@ -29,17 +29,22 @@ function createPlayer(x, y, z) {
 // AABB 與世界碰撞：逐軸移動。box={x,y,z,hw,hh}（x,z 為中心、y 為底）
 function moveBox(world, b, dx, dy, dz) {
   const res = { hitX: false, hitY: false, hitZ: false, onGround: false };
-  const solidAt = (x, y, z) => isSolid(world.getBlock(Math.floor(x), Math.floor(y), Math.floor(z)));
   const eps = 0.001;
 
+  // 回傳 null 或 {top: 最高的方塊頂}（半高方塊 def.h 佔 [by, by+h]）
   const overlaps = (x, y, z) => {
     const x0 = Math.floor(x - b.hw), x1 = Math.floor(x + b.hw);
     const y0 = Math.floor(y), y1 = Math.floor(y + b.hh - eps);
     const z0 = Math.floor(z - b.hw), z1 = Math.floor(z + b.hw);
+    let top = -Infinity;
     for (let bx = x0; bx <= x1; bx++) for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) {
-      if (isSolid(world.getBlock(bx, by, bz))) return true;
+      const id = world.getBlock(bx, by, bz);
+      if (!isSolid(id)) continue;
+      const h = def(id).h !== undefined ? def(id).h : 1;
+      if (y >= by + h) continue; // box 底在方塊頂之上（半磚上方走過不算撞）
+      if (by + h > top) top = by + h;
     }
-    return false;
+    return top > -Infinity ? { top } : null;
   };
 
   // X
@@ -62,9 +67,10 @@ function moveBox(world, b, dx, dy, dz) {
   b.z = nz;
   // Y
   let ny = b.y + dy;
-  if (overlaps(b.x, ny, b.z)) {
+  const oy = overlaps(b.x, ny, b.z);
+  if (oy) {
     if (dy > 0) ny = Math.floor(ny + b.hh - eps) - b.hh - eps * 2;
-    else { ny = Math.floor(ny) + 1 + eps; res.onGround = true; }
+    else { ny = oy.top + eps; res.onGround = true; }
     if (overlaps(b.x, ny, b.z)) ny = b.y;
     res.hitY = true;
   }

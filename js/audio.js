@@ -70,6 +70,12 @@
     craft() { blip(440, 0.08, 'triangle', 0.15, 1.25); blip(660, 0.1, 'triangle', 0.12, 1.2); },
     click() { blip(500, 0.04, 'square', 0.08, 1); },
     drown() { noiseBurst(0.3, 0.2, 400); },
+    sheep() { blip(500 + Math.random() * 60, 0.35, 'sawtooth', 0.08, 0.85); },
+    cow() { blip(150 + Math.random() * 30, 0.5, 'sawtooth', 0.10, 0.7); },
+    hiss() { noiseBurst(1.2, 0.22, 3500); },
+    explosion() { noiseBurst(0.8, 0.5, 300); blip(60, 0.6, 'sawtooth', 0.3, 0.4); },
+    eat() { noiseBurst(0.07, 0.15, 1000); setTimeout(() => noiseBurst(0.07, 0.15, 900), 130); setTimeout(() => noiseBurst(0.08, 0.14, 800), 270); },
+    sleep() { blip(392, 0.5, 'sine', 0.14, 1.0); setTimeout(() => blip(523, 0.8, 'sine', 0.14, 1.0), 350); },
   };
 
   // 環境配樂：緩慢的五聲音階琶音

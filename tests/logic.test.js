@@ -197,7 +197,79 @@ test('實體：殭屍追擊與攻擊事件、豬漫遊', () => {
 
   const pig = EN.makeMob('pig', 0.5, 10, 0.5);
   for (let i = 0; i < 600; i++) EN.stepMob(pig, flat, 0.02, player, rand, false, events);
-  assert.ok(pig.hp === 10 && !pig.dead);
+  assert.ok(pig.hp === EN.MOB_DEFS.pig.hp && !pig.dead);
+});
+
+test('實體：苦力怕貼近點燃並爆炸', () => {
+  const flat = { getBlock: (x, y, z) => (y < 10 ? B.STONE : B.AIR) };
+  const rand = N.mulberry32(5);
+  const player = PH.createPlayer(0.5, 10, 0.5);
+  const c = EN.makeMob('creeper', 4, 10, 0.5);
+  const events = [];
+  for (let i = 0; i < 900 && !c.dead; i++) EN.stepMob(c, flat, 0.02, player, rand, true, events);
+  assert.ok(events.some(e => e.type === 'hiss'), '應有嘶嘶聲事件');
+  const ex = events.find(e => e.type === 'explode');
+  assert.ok(ex, '應有爆炸事件');
+  assert.ok(Math.hypot(ex.x - player.x, ex.z - player.z) < 4, '爆炸點應在玩家附近');
+  assert.ok(c.dead);
+});
+
+test('工具：對的工具挖得快、劍傷害、礦石掉物品', () => {
+  assert.ok(Math.abs(BK.digTime(B.STONE) - 2.2) < 1e-9);
+  assert.ok(Math.abs(BK.digTime(B.STONE, B.IRON_PICK) - 0.44) < 1e-9);
+  assert.ok(Math.abs(BK.digTime(B.STONE, B.IRON_AXE) - 2.2) < 1e-9);
+  assert.ok(Math.abs(BK.digTime(B.LOG, B.DIAMOND_AXE) - 0.2) < 1e-9);
+  assert.strictEqual(BK.digTime(B.BEDROCK, B.DIAMOND_PICK), -1);
+  assert.strictEqual(BK.attackDmg(), BK.HAND_DMG);
+  assert.strictEqual(BK.attackDmg(B.DIAMOND_SWORD), 8);
+  assert.strictEqual(BK.dropOf(B.COAL_ORE), B.COAL);
+  assert.strictEqual(BK.dropOf(B.DIAMOND_ORE), B.DIAMOND);
+  assert.ok(BK.isItem(B.IRON_PICK) && !BK.isItem(B.STONE));
+});
+
+test('物理：半磚站上去是半格高', () => {
+  const w = {
+    getBlock: (x, y, z) => {
+      if (y < 10) return B.STONE;
+      if (x === 0 && y === 10 && z === 0) return B.SLAB_STONE;
+      return B.AIR;
+    },
+  };
+  const p = PH.createPlayer(0.5, 13, 0.5);
+  const input = { mf: 0, ms: 0, jump: false, run: false, up: false, down: false };
+  for (let i = 0; i < 200; i++) PH.stepPlayer(p, w, input, 0.02, 'survival');
+  assert.ok(p.onGround);
+  assert.ok(Math.abs(p.y - 10.5) < 0.01, '應站在半磚頂 y≈10.5，實得 ' + p.y);
+});
+
+test('網格：半磚頂面在 0.5、床在 0.55', () => {
+  const w = makeStubWorld([[3, 40, 3, B.SLAB_STONE]]);
+  const m = buildChunkMesh(w, 0, 0);
+  let maxY = 0;
+  for (let i = 0; i < m.solid.verts.length; i += 7) maxY = Math.max(maxY, m.solid.verts[i + 1]);
+  assert.ok(Math.abs(maxY - 40.5) < 1e-6, '半磚頂應在 40.5，實得 ' + maxY);
+
+  const w2 = makeStubWorld([[3, 40, 3, B.BED]]);
+  const m2 = buildChunkMesh(w2, 0, 0);
+  let maxY2 = 0;
+  for (let i = 0; i < m2.solid.verts.length; i += 7) maxY2 = Math.max(maxY2, m2.solid.verts[i + 1]);
+  assert.ok(Math.abs(maxY2 - 40.55) < 1e-6, '床頂應在 40.55，實得 ' + maxY2);
+});
+
+test('合成：木棒→火把→工具鏈', () => {
+  const inv = INV.createInventory();
+  INV.addItem(inv, B.LOG, 3);
+  const find = (out) => INV.RECIPES.find(r => r.out === out);
+  assert.ok(INV.craft(inv, find(B.PLANK)));           // 4 木板
+  assert.ok(INV.craft(inv, find(B.STICK)));           // 4 木棒（耗 2 木板）
+  INV.addItem(inv, B.COAL, 1);
+  assert.ok(INV.craft(inv, find(B.TORCH)));           // 4 火把
+  assert.strictEqual(INV.countOf(inv, B.TORCH), 4);
+  assert.ok(INV.craft(inv, find(B.PLANK)));           // 補木板
+  assert.ok(INV.craft(inv, find(B.WOOD_PICK)));       // 木鎬：3 木板＋2 木棒
+  assert.strictEqual(INV.countOf(inv, B.WOOD_PICK), 1);
+  INV.addItem(inv, B.GUNPOWDER, 3); INV.addItem(inv, B.SAND, 3);
+  assert.ok(INV.craft(inv, find(B.TNT)));
 });
 
 test('實體：掉落物落地與拾取', () => {
