@@ -1,10 +1,10 @@
 # 我的方塊世界 — 開發與審核規範
 
-> 本檔與 `AGENTS.md` 內容同步（本檔給 Claude Code、後者給 Codex 等其他代理）。修改任一檔請同步另一檔。
+> 本檔與 `CLAUDE.md` 內容同步（本檔給 Codex 等其他代理、後者給 Claude Code）。修改任一檔請同步另一檔。
 > **接手必讀：`docs/HANDOVER.md`**（架構導覽、驗證方法、踩過的坑、擴充速查、路線圖都在那）。
 >
 > Minecraft 風格體素沙盒。純前端、零建置、零外部依賴（連 three.js 都沒有，手寫 WebGL2）。
-> 雙擊 `index.html` 離線即玩；開發用 `npx http-server -p 8127 .` 或 `.claude/launch.json` 的 preview。
+> 雙擊 `index.html` 離線即玩；開發用 `npx http-server -p 8127 .`。
 > 線上版：https://sancola1219-collab.github.io/block-world/ （main 分支根目錄＝GitHub Pages）
 > 設計文件：`docs/superpowers/specs/2026-07-10-block-world-design.md`
 
